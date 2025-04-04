@@ -1,4 +1,3 @@
-```
 # dBd-Filing
 A Simple Virtual Filing System
 
@@ -37,15 +36,15 @@ This is a virtual ICP filing system based on PHP and SQLite, intended solely for
 ## 文件结构 / File Structure
 ```
 virtual-filing/
-├── index.php         # 主页（提交表单） / Homepage (Submission Form)
-├── query.php         # 查询页面 / Query Page
-├── process.php       # 处理表单提交 / Process Form Submission
-├── admin.php         # 后台管理页面 / Admin Management Page
-├── login.php         # 后台登录页面 / Admin Login Page
-├── logout.php        # 退出登录 / Logout
-├── public.php        # 公示页面 / Public Page
-├── style.css         # 美化样式 / Styling
-└── database.sqlite   # SQLite 数据库（运行时自动创建） / SQLite Database (Auto-created at Runtime)
+├── index.php        # 主页（提交表单） / Homepage (Submission Form)
+├── query.php        # 查询页面 / Query Page
+├── process.php      # 处理表单提交 / Process Form Submission
+├── admin.php        # 后台管理页面 / Admin Management Page
+├── login.php        # 后台登录页面 / Admin Login Page
+├── logout.php       # 退出登录 / Logout
+├── public.php       # 公示页面 / Public Page
+├── style.css        # 美化样式 / Styling
+└── database.sqlite  # SQLite 数据库（运行时自动创建） / SQLite Database (Auto-created at Runtime)
 ```
 
 ### 文件功能说明 / File Function Descriptions
@@ -78,18 +77,16 @@ virtual-filing/
 
 ## 安装步骤 / Installation Steps
 1. **克隆仓库或下载发行版本 / Clone the Repository or Download Release**  
-   - 通过 Git 克隆：  
-     Clone via Git:  
+   - 通过 Git 克隆 / Clone via Git:  
      ```
      git clone https://github.com/bbb-lsy07/dBd-Filing.git
      cd dBd-Filing
      ```
-   - 或直接下载发行版本并解压到你的网站目录。  
-     Or download the release and extract it to your web directory.  
+   - 或直接下载发行版本并解压到你的网站目录 / Or download the release and extract it to your web directory.  
 2. **配置服务器 / Configure the Server**  
    - 将项目文件夹放入 Web 服务器目录（如 Apache 的 `htdocs` 或 Nginx 的 `html`）。  
      Place the project folder in the web server directory (e.g., Apache’s `htdocs` or Nginx’s `html`).  
-.Concurrent - 确保服务器支持 PHP（推荐 PHP 7.4 或更高版本）并启用 SQLite 扩展。  
+   - 确保服务器支持 PHP（推荐 PHP 7.4 或更高版本）并启用 SQLite 扩展。  
      Ensure the server supports PHP (PHP 7.4 or higher recommended) with the SQLite extension enabled.  
 3. **设置权限 / Set Permissions**  
    - 确保项目目录可写，以便自动创建 `database.sqlite` 文件。  
@@ -192,4 +189,3 @@ This project is licensed under the [MIT License](LICENSE), free to use and modif
   Please submit an [Issue](https://github.com/bbb-lsy07/dBd-Filing/issues)
 
 感谢使用和支持！ / Thank you for using and supporting!
-```
