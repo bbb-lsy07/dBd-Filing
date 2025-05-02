@@ -1,102 +1,88 @@
 <?php
 session_start();
+require_once 'common.php';
+$db = init_database();
 
-if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true || !isset($_SESSION['admin_id'])) {
-    header("Location: login.php");
-    exit;
+if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true || !isset($_SESSION['admin_id']) || (isset($_SESSION['user_role']) && $_SESSION['user_role'] !== 'admin')) {
+    header("HTTP/1.1 403 Forbidden");
+    exit("权限不足");
 }
 
-$db = new SQLite3('database.sqlite');
+$settings = $db->querySingle("SELECT * FROM settings", true);
+require_once 'send_mail.php';
 
-// 创建管理员表（确保表存在）
-$db->exec("CREATE TABLE IF NOT EXISTS admins (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE,
-    password TEXT
-)");
-
-// 检查并更新 filings 表结构
-$result = $db->query("PRAGMA table_info(filings)");
-$has_status = false;
-while ($column = $result->fetchArray(SQLITE3_ASSOC)) {
-    if ($column['name'] === 'status') {
-        $has_status = true;
-        break;
-    }
-}
-if (!$has_status) {
-    $db->exec("CREATE TABLE filings_new (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        filing_number TEXT UNIQUE,
-        website_name TEXT,
-        website_url TEXT,
-        description TEXT,
-        contact_email TEXT,
-        submission_date TEXT,
-        status TEXT DEFAULT 'pending'
-    )");
-    $db->exec("INSERT INTO filings_new (id, filing_number, website_name, website_url, description, contact_email, submission_date)
-               SELECT id, filing_number, website_name, website_url, description, contact_email, submission_date FROM filings");
-    $db->exec("UPDATE filings_new SET status = 'approved' WHERE status IS NULL");
-    $db->exec("DROP TABLE filings");
-    $db->exec("ALTER TABLE filings_new RENAME TO filings");
-}
-
-// 处理删除
 if (isset($_GET['delete'])) {
-    $id = $_GET['delete'];
     $stmt = $db->prepare("DELETE FROM filings WHERE id = :id");
-    $stmt->bindValue(':id', $id, SQLITE3_INTEGER);
+    $stmt->bindValue(':id', (int)$_GET['delete'], SQLITE3_INTEGER);
     $stmt->execute();
     header("Location: admin.php");
     exit;
 }
 
-// 处理审核
 if (isset($_GET['approve'])) {
-    $id = $_GET['approve'];
     $stmt = $db->prepare("UPDATE filings SET status = 'approved' WHERE id = :id");
-    $stmt->bindValue(':id', $id, SQLITE3_INTEGER);
+    $stmt->bindValue(':id', (int)$_GET['approve'], SQLITE3_INTEGER);
     $stmt->execute();
-    header("Location: admin.php");
-    exit;
-}
-if (isset($_GET['reject'])) {
-    $id = $_GET['reject'];
-    $stmt = $db->prepare("UPDATE filings SET status = 'rejected' WHERE id = :id");
-    $stmt->bindValue(':id', $id, SQLITE3_INTEGER);
-    $stmt->execute();
+    $stmt = $db->prepare("SELECT * FROM filings WHERE id = :id");
+    $stmt->bindValue(':id', (int)$_GET['approve'], SQLITE3_INTEGER);
+    $filing = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+    $subject = "您的备案已通过审核 - " . ($settings['site_title'] ?? '');
+    $body = "<h2>备案审核通过</h2><p>您的网站 <strong>" . htmlspecialchars($filing['website_name']) . "</strong> 的备案申请已通过审核。</p><p>备案号：联bBb盟 icp备" . htmlspecialchars($filing['filing_number']) . "</p><p>请将以下代码添加到您的网站页脚：</p><pre><a href='" . htmlspecialchars($settings['site_url']) . "/query.php?keyword=" . htmlspecialchars($filing['filing_number']) . "' target='_blank'>联bBb盟 icp备" . htmlspecialchars($filing['filing_number']) . "</a></pre>";
+    if (!sendMail($filing['contact_email'], $subject, $body)) {
+        $mail_error = "邮件发送失败，请手动通知用户";
+    }
     header("Location: admin.php");
     exit;
 }
 
-// 处理修改账户
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['new_username']) && isset($_POST['new_password']) && isset($_POST['confirm_password'])) {
-    $new_username = htmlspecialchars($_POST['new_username']);
-    $new_password = $_POST['new_password'];
-    $confirm_password = $_POST['confirm_password'];
-    
-    if ($new_password === $confirm_password) {
-        $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
-        $admin_id = $_SESSION['admin_id'];
-        
-        $stmt = $db->prepare("UPDATE admins SET username = :username, password = :password WHERE id = :id");
-        if ($stmt) {
-            $stmt->bindValue(':username', $new_username, SQLITE3_TEXT);
-            $stmt->bindValue(':password', $hashed_password, SQLITE3_TEXT);
-            $stmt->bindValue(':id', $admin_id, SQLITE3_INTEGER);
-            $stmt->execute();
-            $update_message = "账户信息已更新，请使用新用户名和密码重新登录！";
-            session_destroy(); // 修改后强制退出登录
-        } else {
-            $update_error = "更新账户失败，请稍后重试！";
-        }
+if (isset($_GET['reject'])) {
+    $stmt = $db->prepare("UPDATE filings SET status = 'rejected' WHERE id = :id");
+    $stmt->bindValue(':id', (int)$_GET['reject'], SQLITE3_INTEGER);
+    $stmt->execute();
+    $stmt = $db->prepare("SELECT * FROM filings WHERE id = :id");
+    $stmt->bindValue(':id', (int)$_GET['reject'], SQLITE3_INTEGER);
+    $filing = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+    $subject = "您的备案未通过审核 - " . ($settings['site_title'] ?? '');
+    $body = "<h2>备案审核未通过</h2><p>您的网站 <strong>" . htmlspecialchars($filing['website_name']) . "</strong> 的备案申请未通过审核。</p><p>请检查信息后重新提交。</p>";
+    if (!sendMail($filing['contact_email'], $subject, $body)) {
+        $mail_error = "邮件发送失败，请手动通知用户";
+    }
+    header("Location: admin.php");
+    exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['new_username'])) {
+    if ($_POST['new_password'] === $_POST['confirm_password']) {
+        $stmt = $db->prepare("UPDATE admins SET username = :username, password = :password, force_reset = 0 WHERE id = :id");
+        $stmt->bindValue(':username', htmlspecialchars($_POST['new_username']), SQLITE3_TEXT);
+        $stmt->bindValue(':password', password_hash($_POST['new_password'], PASSWORD_DEFAULT), SQLITE3_TEXT);
+        $stmt->bindValue(':id', $_SESSION['admin_id'], SQLITE3_INTEGER);
+        $stmt->execute();
+        $update_message = "账户信息已更新，请重新登录！";
+        session_destroy();
     } else {
         $update_error = "两次输入的密码不一致！";
     }
 }
 
-// 获取所有备案记录
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['site_title'])) {
+    $stmt = $db->prepare("UPDATE settings SET site_title = :site_title, site_url = :site_url, welcome_message = :welcome_message, contact_email = :contact_email, qq_group = :qq_group, smtp_host = :smtp_host, smtp_port = :smtp_port, smtp_username = :smtp_username, smtp_password = :smtp_password, smtp_secure = :smtp_secure, background_image = :background_image WHERE id = 1");
+    $stmt->bindValue(':site_title', htmlspecialchars($_POST['site_title']), SQLITE3_TEXT);
+    $stmt->bindValue(':site_url', htmlspecialchars($_POST['site_url']), SQLITE3_TEXT);
+    $stmt->bindValue(':welcome_message', htmlspecialchars($_POST['welcome_message']), SQLITE3_TEXT);
+    $stmt->bindValue(':contact_email', htmlspecialchars($_POST['contact_email']), SQLITE3_TEXT);
+    $stmt->bindValue(':qq_group', htmlspecialchars($_POST['qq_group']), SQLITE3_TEXT);
+    $stmt->bindValue(':smtp_host', htmlspecialchars($_POST['smtp_host']), SQLITE3_TEXT);
+    $stmt->bindValue(':smtp_port', (int)$_POST['smtp_port'], SQLITE3_INTEGER);
+    $stmt->bindValue(':smtp_username', htmlspecialchars($_POST['smtp_username']), SQLITE3_TEXT);
+    $stmt->bindValue(':smtp_password', htmlspecialchars($_POST['smtp_password']), SQLITE3_TEXT);
+    $stmt->bindValue(':smtp_secure', htmlspecialchars($_POST['smtp_secure']), SQLITE3_TEXT);
+    $stmt->bindValue(':background_image', htmlspecialchars($_POST['background_image']), SQLITE3_TEXT);
+    $stmt->execute();
+    $settings_update_message = "站点设置已更新！";
+    $settings = $db->querySingle("SELECT * FROM settings", true);
+}
+
 $results = $db->query("SELECT * FROM filings ORDER BY submission_date DESC");
 ?>
 
@@ -104,105 +90,163 @@ $results = $db->query("SELECT * FROM filings ORDER BY submission_date DESC");
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>后台管理 - 联bBb盟 ICP</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
+    <title>后台管理 - <?php echo htmlspecialchars($settings['site_title'] ?? ''); ?></title>
+    <link rel="icon" href="https://www.dmoe.cc/favicon.ico" type="image/x-icon">
     <link rel="stylesheet" href="style.css">
+    <style>
+        body {
+            background-image: url('<?php echo htmlspecialchars($settings['background_image'] ?? 'https://www.dmoe.cc/random.php'); ?>');
+        }
+    </style>
 </head>
 <body>
     <div class="github-corner">
         <a href="https://github.com/bbb-lsy07/dBd-Filing" target="_blank" class="github-link">开源地址</a>
     </div>
-    <div class="container">
-        <h1>后台管理</h1>
-        <p>欢迎，管理员！ 
-            <a href="#" class="modify-link" onclick="document.getElementById('modifyModal').style.display='flex'">修改账户</a> 
-            <a href="logout.php" class="logout-link">退出登录</a>
-        </p>
-        
-        <h2>备案记录</h2>
-        <div class="table-wrapper">
+    <div class="container page-transition">
+        <div class="header">
+            <h1 class="holographic-text">后台管理</h1>
+            <p>欢迎，管理员！ 
+                <a href="#" class="modify-link" onclick="document.getElementById('modifyModal').style.display='flex'">修改账户</a>
+                <a href="#" class="modify-link" onclick="document.getElementById('settingsModal').style.display='flex'">站点设置</a>
+                <a href="logout.php" class="logout-link">退出登录</a>
+            </p>
+            <?php if (isset($settings_update_message)) echo "<p class='success'>$settings_update_message</p>"; ?>
+            <?php if (isset($mail_error)) echo "<p class='error'>$mail_error</p>"; ?>
+        </div>
+        <div class="table-wrapper card-effect">
             <table>
                 <thead>
                     <tr>
-                        <th>ID</th>
-                        <th>备案号</th>
-                        <th>网站名称</th>
-                        <th>地址</th>
-                        <th>描述</th>
-                        <th>邮箱</th>
-                        <th>提交时间</th>
-                        <th>状态</th>
-                        <th>操作</th>
+                        <th data-label="ID">ID</th>
+                        <th data-label="备案号">备案号</th>
+                        <th data-label="网站名称">网站名称</th>
+                        <th data-label="地址">地址</th>
+                        <th data-label="描述">描述</th>
+                        <th data-label="邮箱">邮箱</th>
+                        <th data-label="提交时间">提交时间</th>
+                        <th data-label="状态">状态</th>
+                        <th data-label="操作">操作</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php 
-                    if ($results) {
-                        while ($row = $results->fetchArray(SQLITE3_ASSOC)) {
-                            echo "<tr>";
-                            echo "<td>{$row['id']}</td>";
-                            echo "<td>联bBb盟 icp备{$row['filing_number']}</td>";
-                            echo "<td>{$row['website_name']}</td>";
-                            echo "<td><a href='{$row['website_url']}' target='_blank'>{$row['website_url']}</a></td>";
-                            echo "<td>{$row['description']}</td>";
-                            echo "<td>{$row['contact_email']}</td>";
-                            echo "<td>{$row['submission_date']}</td>";
-                            echo "<td>" . ($row['status'] == 'pending' ? '待审核' : ($row['status'] == 'approved' ? '已通过' : '已拒绝')) . "</td>";
-                            echo "<td>";
-                            if ($row['status'] == 'pending') {
-                                echo "<a href='admin.php?approve={$row['id']}' class='approve-link'>通过</a> | ";
-                                echo "<a href='admin.php?reject={$row['id']}' class='reject-link'>拒绝</a> | ";
-                            }
-                            echo "<a href='admin.php?delete={$row['id']}' class='delete-link' onclick='return confirm(\"确定删除吗？\");'>删除</a>";
-                            echo "</td>";
-                            echo "</tr>";
-                        }
-                    } else {
-                        echo "<tr><td colspan='9'>暂无备案记录</td></tr>";
-                    }
-                    ?>
+                    <?php while ($row = $results->fetchArray(SQLITE3_ASSOC)): ?>
+                        <tr>
+                            <td data-label="ID"><?php echo $row['id']; ?></td>
+                            <td data-label="备案号">联bBb盟 icp备<?php echo $row['filing_number']; ?></td>
+                            <td data-label="网站名称"><?php echo htmlspecialchars($row['website_name']); ?></td>
+                            <td data-label="地址"><a href="<?php echo htmlspecialchars($row['website_url']); ?>" target="_blank"><?php echo htmlspecialchars($row['website_url']); ?></a></td>
+                            <td data-label="描述"><?php echo htmlspecialchars($row['description']); ?></td>
+                            <td data-label="邮箱"><?php echo htmlspecialchars($row['contact_email']); ?></td>
+                            <td data-label="提交时间"><?php echo htmlspecialchars($row['submission_date']); ?></td>
+                            <td data-label="状态"><?php echo $row['status'] == 'pending' ? '待审核' : ($row['status'] == 'approved' ? '已通过' : '已拒绝'); ?></td>
+                            <td data-label="操作">
+                                <?php if ($row['status'] == 'pending'): ?>
+                                    <a href="admin.php?approve=<?php echo $row['id']; ?>" class="approve-link">通过</a> |
+                                    <a href="admin.php?reject=<?php echo $row['id']; ?>" class="reject-link">拒绝</a> |
+                                <?php endif; ?>
+                                <a href="admin.php?delete=<?php echo $row['id']; ?>" class="delete-link" onclick="return confirm('确定删除吗？');">删除</a>
+                            </td>
+                        </tr>
+                    <?php endwhile; ?>
                 </tbody>
             </table>
         </div>
-        
-        <div class="links">
-            <a href="index.php" class="back-link">返回首页</a>
-        </div>
     </div>
-
-    <!-- 修改账户模态窗口 -->
+    <div class="footer">
+        <a href="index.php">主页</a>
+        <a href="about.php">关于</a>
+        <a href="join.php">加入</a>
+        <a href="change.php">变更</a>
+        <a href="public.php">公示</a>
+        <a href="travel.php">迁跃</a>
+        <br>
+        <a href="<?php echo htmlspecialchars($settings['site_url'] ?? ''); ?>/query.php?keyword=20240001" target="_blank">联bBb盟 icp备20240001号</a>
+    </div>
     <div id="modifyModal" class="modal" style="display: none;">
-        <div class="modal-content">
+        <div class="modal-content card-effect">
             <span class="close" onclick="document.getElementById('modifyModal').style.display='none'">×</span>
             <h2>修改账户信息</h2>
             <?php if (isset($update_message)) echo "<p class='success'>$update_message</p>"; ?>
             <?php if (isset($update_error)) echo "<p class='error'>$update_error</p>"; ?>
-            <form action="admin.php" method="POST">
-                <div class="form-group">
-                    <label for="new_username">新用户名</label>
-                    <input type="text" id="new_username" name="new_username" required>
-                </div>
-                <div class="form-group">
-                    <label for="new_password">新密码</label>
-                    <input type="password" id="new_password" name="new_password" required>
-                </div>
-                <div class="form-group">
-                    <label for="confirm_password">确认新密码</label>
-                    <input type="password" id="confirm_password" name="confirm_password" required>
-                </div>
-                <button type="submit">更新账户</button>
+            <form action="admin.php" method="POST" class="neon-form">
+                <input type="text" name="new_username" class="search-input" placeholder="请输入新用户名" required>
+                <input type="password" name="new_password" class="search-input" placeholder="请输入新密码" required>
+                <input type="password" name="confirm_password" class="search-input" placeholder="请再次输入新密码" required>
+                <button type="submit" class="search-button glow-button">
+                    <span>更新账户</span>
+                    <div class="glow"></div>
+                </button>
             </form>
         </div>
     </div>
-
+    <div id="settingsModal" class="modal" style="display: none;">
+        <div class="modal-content card-effect">
+            <span class="close" onclick="document.getElementById('settingsModal').style.display='none'">×</span>
+            <h2>站点设置</h2>
+            <form action="admin.php" method="POST" class="neon-form">
+                <input type="text" name="site_title" class="search-input" value="<?php echo htmlspecialchars($settings['site_title'] ?? ''); ?>" placeholder="请输入站点标题（如：联bBb盟 ICP 备案系统）" required>
+                <input type="url" name="site_url" class="search-input" value="<?php echo htmlspecialchars($settings['site_url'] ?? ''); ?>" placeholder="请输入站点URL（如：https://icp.bbb-lsy07.my）" required>
+                <textarea name="welcome_message" class="search-input" placeholder="请输入欢迎信息（如：这是一个虚拟备案系统）" required><?php echo htmlspecialchars($settings['welcome_message'] ?? ''); ?></textarea>
+                <input type="email" name="contact_email" class="search-input" value="<?php echo htmlspecialchars($settings['contact_email'] ?? ''); ?>" placeholder="请输入联系邮箱（如：admin@bbb-lsy07.my）" required>
+                <input type="text" name="qq_group" class="search-input" value="<?php echo htmlspecialchars($settings['qq_group'] ?? ''); ?>" placeholder="请输入QQ群号（如：123456789）" required>
+                <input type="url" name="background_image" class="search-input" value="<?php echo htmlspecialchars($settings['background_image'] ?? ''); ?>" placeholder="请输入背景图URL（如：https://www.dmoe.cc/random.php）" required>
+                <h3>SMTP 设置</h3>
+                <input type="text" name="smtp_host" class="search-input" value="<?php echo htmlspecialchars($settings['smtp_host'] ?? ''); ?>" placeholder="SMTP 服务器（如：smtp.gmail.com）">
+                <input type="number" name="smtp_port" class="search-input" value="<?php echo htmlspecialchars($settings['smtp_port'] ?? ''); ?>" placeholder="SMTP 端口（如：587）">
+                <input type="text" name="smtp_username" class="search-input" value="<?php echo htmlspecialchars($settings['smtp_username'] ?? ''); ?>" placeholder="SMTP 用户名（如：your.email@gmail.com）">
+                <input type="password" name="smtp_password" class="search-input" value="<?php echo htmlspecialchars($settings['smtp_password'] ?? ''); ?>" placeholder="SMTP 密码">
+                <select name="smtp_secure" class="search-input">
+                    <option value="tls" <?php if (($settings['smtp_secure'] ?? 'tls') == 'tls') echo 'selected'; ?>>TLS</option>
+                    <option value="ssl" <?php if (($settings['smtp_secure'] ?? 'tls') == 'ssl') echo 'selected'; ?>>SSL</option>
+                </select>
+                <button type="submit" class="search-button glow-button">
+                    <span>保存设置</span>
+                    <div class="glow"></div>
+                </button>
+            </form>
+        </div>
+    </div>
     <script>
-        // 点击模态窗口外部关闭
         window.onclick = function(event) {
-            var modal = document.getElementById('modifyModal');
-            if (event.target == modal) {
-                modal.style.display = "none";
-            }
+            ['modifyModal', 'settingsModal'].forEach(id => {
+                let modal = document.getElementById(id);
+                if (event.target == modal) modal.style.display = "none";
+            });
         }
+        document.addEventListener('DOMContentLoaded', () => {
+            document.body.classList.add('loaded');
+            // Dynamically adjust container height to ensure header visibility
+            const container = document.querySelector('.container');
+            const header = document.querySelector('.header');
+            const tableWrapper = document.querySelector('.table-wrapper');
+            function adjustContainerHeight() {
+                const headerHeight = header.offsetHeight;
+                const windowHeight = window.innerHeight;
+                const footerHeight = document.querySelector('.footer').offsetHeight;
+                const availableHeight = windowHeight - footerHeight - 40; // Account for padding
+                container.style.minHeight = `${availableHeight}px`;
+                tableWrapper.style.maxHeight = `${availableHeight - headerHeight - 60}px`;
+            }
+            adjustContainerHeight();
+            window.addEventListener('resize', adjustContainerHeight);
+        });
+        document.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                document.body.classList.remove('loaded');
+                setTimeout(() => {
+                    window.location = e.target.href;
+                }, 300);
+            });
+        });
+        document.querySelectorAll('form').forEach(form => {
+            form.addEventListener('submit', () => {
+                form.style.transform = 'scale(0.98)';
+                setTimeout(() => form.style.transform = '', 200);
+            });
+        });
     </script>
 </body>
 </html>

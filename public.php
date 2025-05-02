@@ -1,34 +1,7 @@
 <?php
-$db = new SQLite3('database.sqlite');
-
-// 检查并更新表结构
-$result = $db->query("PRAGMA table_info(filings)");
-$has_status = false;
-while ($column = $result->fetchArray(SQLITE3_ASSOC)) {
-    if ($column['name'] === 'status') {
-        $has_status = true;
-        break;
-    }
-}
-if (!$has_status) {
-    $db->exec("CREATE TABLE filings_new (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        filing_number TEXT UNIQUE,
-        website_name TEXT,
-        website_url TEXT,
-        description TEXT,
-        contact_email TEXT,
-        submission_date TEXT,
-        status TEXT DEFAULT 'pending'
-    )");
-    $db->exec("INSERT INTO filings_new (id, filing_number, website_name, website_url, description, contact_email, submission_date)
-               SELECT id, filing_number, website_name, website_url, description, contact_email, submission_date FROM filings");
-    $db->exec("UPDATE filings_new SET status = 'approved' WHERE status IS NULL");
-    $db->exec("DROP TABLE filings");
-    $db->exec("ALTER TABLE filings_new RENAME TO filings");
-}
-
-// 查询已通过审核的记录
+require_once 'common.php';
+$db = init_database();
+$settings = $db->querySingle("SELECT * FROM settings", true);
 $results = $db->query("SELECT * FROM filings WHERE status = 'approved' ORDER BY submission_date DESC");
 ?>
 
@@ -36,52 +9,75 @@ $results = $db->query("SELECT * FROM filings WHERE status = 'approved' ORDER BY 
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>公示页面 - 联bBb盟 ICP</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
+    <meta name="description" content="查看已通过审核的虚拟 ICP 备案网站列表。">
+    <meta name="keywords" content="ICP 备案公示, 虚拟备案, <?php echo htmlspecialchars($settings['site_title'] ?? ''); ?>">
+    <title>公示页面 - <?php echo htmlspecialchars($settings['site_title'] ?? ''); ?></title>
+    <link rel="icon" href="https://www.dmoe.cc/favicon.ico" type="image/x-icon">
     <link rel="stylesheet" href="style.css">
+    <style>
+        body {
+            background-image: url('<?php echo htmlspecialchars($settings['background_image'] ?? 'https://www.dmoe.cc/random.php'); ?>');
+        }
+    </style>
 </head>
 <body>
     <div class="github-corner">
         <a href="https://github.com/bbb-lsy07/dBd-Filing" target="_blank" class="github-link">开源地址</a>
     </div>
-    <div class="container">
-        <h1>公示页面</h1>
-        <p>以下为已通过审核的备案网站。</p>
-        
-        <div class="table-wrapper">
+    <div class="container page-transition">
+        <div class="header">
+            <h1 class="holographic-text">公示页面</h1>
+            <p>以下为已通过审核的备案网站。</p>
+        </div>
+        <div class="table-wrapper card-effect">
             <table>
                 <thead>
                     <tr>
-                        <th>备案号</th>
-                        <th>网站名称</th>
-                        <th>地址</th>
-                        <th>描述</th>
-                        <th>提交时间</th>
+                        <th data-label="备案号">备案号</th>
+                        <th data-label="网站名称">网站名称</th>
+                        <th data-label="地址">地址</th>
+                        <th data-label="描述">描述</th>
+                        <th data-label="提交时间">提交时间</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php 
-                    if ($results) {
-                        while ($row = $results->fetchArray(SQLITE3_ASSOC)) {
-                            echo "<tr>";
-                            echo "<td><a href='query.php?keyword={$row['filing_number']}' class='filing-link'>联bBb盟 icp备{$row['filing_number']}</a></td>";
-                            echo "<td>{$row['website_name']}</td>";
-                            echo "<td><a href='{$row['website_url']}' target='_blank'>{$row['website_url']}</a></td>";
-                            echo "<td>{$row['description']}</td>";
-                            echo "<td>{$row['submission_date']}</td>";
-                            echo "</tr>";
-                        }
-                    } else {
-                        echo "<tr><td colspan='5'>暂无通过审核的备案</td></tr>";
-                    }
-                    ?>
+                    <?php while ($row = $results->fetchArray(SQLITE3_ASSOC)): ?>
+                        <tr>
+                            <td data-label="备案号"><a href="query.php?keyword=<?php echo $row['filing_number']; ?>" class="filing-link">联bBb盟 icp备<?php echo $row['filing_number']; ?></a></td>
+                            <td data-label="网站名称"><?php echo htmlspecialchars($row['website_name']); ?></td>
+                            <td data-label="地址"><a href="<?php echo htmlspecialchars($row['website_url']); ?>" target="_blank"><?php echo htmlspecialchars($row['website_url']); ?></a></td>
+                            <td data-label="描述"><?php echo htmlspecialchars($row['description']); ?></td>
+                            <td data-label="提交时间"><?php echo htmlspecialchars($row['submission_date']); ?></td>
+                        </tr>
+                    <?php endwhile; ?>
                 </tbody>
             </table>
         </div>
-        
-        <div class="links">
-            <a href="index.php" class="back-link">返回首页</a>
-        </div>
     </div>
+    <div class="footer">
+        <a href="index.php">主页</a>
+        <a href="about.php">关于</a>
+        <a href="join.php">加入</a>
+        <a href="change.php">变更</a>
+        <a href="public.php">公示</a>
+        <a href="travel.php">迁跃</a>
+        <br>
+        <a href="<?php echo htmlspecialchars($settings['site_url'] ?? ''); ?>/query.php?keyword=20240001" target="_blank">联bBb盟 icp备20240001号</a>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            document.body.classList.add('loaded');
+        });
+        document.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                document.body.classList.remove('loaded');
+                setTimeout(() => {
+                    window.location = e.target.href;
+                }, 300);
+            });
+        });
+    </script>
 </body>
 </html>
