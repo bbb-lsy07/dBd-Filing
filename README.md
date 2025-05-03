@@ -256,8 +256,8 @@ We welcome Issues or Pull Requests! Here are the steps to contribute:
 
 ## 开源许可 / Open Source License
 
-本项目采用 MIT 许可证，欢迎自由使用和修改。\
-This project is licensed under the MIT License, free to use and modify.
+本项目采用 MIT 许可证，欢迎自由使用和修改。如果使用此开源模板请在站点内任何位置保留开源地址！\
+This project is licensed under the MIT License, free to use and modify.If you use this open source template, please keep the open source address anywhere in the site!
 
 ---
 
