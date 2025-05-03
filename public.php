@@ -11,13 +11,13 @@ $results = $db->query("SELECT * FROM filings WHERE status = 'approved' ORDER BY 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
     <meta name="description" content="查看已通过审核的虚拟 ICP 备案网站列表。">
-    <meta name="keywords" content="ICP 备案公示, 虚拟备案, <?php echo htmlspecialchars($settings['site_title'] ?? ''); ?>">
-    <title>公示页面 - <?php echo htmlspecialchars($settings['site_title'] ?? ''); ?></title>
+    <meta name="keywords" content="ICP 备案公示, 虚拟备案, <?php echo htmlspecialchars($settings['site_title']?? ''); ?>">
+    <title>公示页面 - <?php echo htmlspecialchars($settings['site_title']?? ''); ?></title>
     <link rel="icon" href="https://www.dmoe.cc/favicon.ico" type="image/x-icon">
     <link rel="stylesheet" href="style.css">
     <style>
         body {
-            background-image: url('<?php echo htmlspecialchars($settings['background_image'] ?? 'https://www.dmoe.cc/random.php'); ?>');
+            background-image: url('<?php echo htmlspecialchars($settings['background_image']?? 'https://www.dmoe.cc/random.php'); ?>');
         }
     </style>
 </head>
@@ -42,7 +42,7 @@ $results = $db->query("SELECT * FROM filings WHERE status = 'approved' ORDER BY 
                     </tr>
                 </thead>
                 <tbody>
-                    <?php while ($row = $results->fetchArray(SQLITE3_ASSOC)): ?>
+                    <?php while ($row = $results->fetchArray(SQLITE3_ASSOC)):?>
                         <tr>
                             <td data-label="备案号"><a href="query.php?keyword=<?php echo $row['filing_number']; ?>" class="filing-link">联bBb盟 icp备<?php echo $row['filing_number']; ?></a></td>
                             <td data-label="网站名称"><?php echo htmlspecialchars($row['website_name']); ?></td>
@@ -50,7 +50,7 @@ $results = $db->query("SELECT * FROM filings WHERE status = 'approved' ORDER BY 
                             <td data-label="描述"><?php echo htmlspecialchars($row['description']); ?></td>
                             <td data-label="提交时间"><?php echo htmlspecialchars($row['submission_date']); ?></td>
                         </tr>
-                    <?php endwhile; ?>
+                    <?php endwhile;?>
                 </tbody>
             </table>
         </div>
@@ -63,8 +63,9 @@ $results = $db->query("SELECT * FROM filings WHERE status = 'approved' ORDER BY 
         <a href="public.php">公示</a>
         <a href="travel.php">迁跃</a>
         <br>
-        <a href="<?php echo htmlspecialchars($settings['site_url'] ?? ''); ?>/query.php?keyword=20240001" target="_blank">联bBb盟 icp备20240001号</a>
+        <a href="<?php echo htmlspecialchars($settings['site_url']?? ''); ?>/query.php?keyword=20240001" target="_blank">联bBb盟 icp备20240001号</a>
     </div>
+    <?php echo getFooterText();?>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             document.body.classList.add('loaded');

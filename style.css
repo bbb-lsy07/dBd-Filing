@@ -26,7 +26,6 @@ body {
     background: #333 url('https://www.dmoe.cc/random.php') no-repeat center center fixed;
     background-size: cover;
     position: relative;
-    transition: opacity 0.3s ease;
 }
 
 body::before {
@@ -66,19 +65,10 @@ body, p, a, td, th, span, pre, input, textarea, button {
     border-radius: 20px;
     width: 100%;
     max-width: 1200px;
+    min-height: 80vh;
     position: relative;
     z-index: 1;
-    transition: transform 0.3s ease, opacity 0.3s ease;
-}
-
-.page-transition {
-    opacity: 0;
-    transform: translateY(20px);
-}
-
-.loaded .page-transition {
-    opacity: 1;
-    transform: translateY(0);
+    transition: transform 0.3s ease;
 }
 
 .card-effect {
@@ -100,8 +90,9 @@ body, p, a, td, th, span, pre, input, textarea, button {
 }
 
 h1 {
-    font-size: 28px;
-    font-weight: 600;
+    font-size: 32px;
+    font-weight: 700;
+    text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
 }
 
 h2 {
@@ -114,8 +105,11 @@ h2 {
     background-clip: text;
     -webkit-background-clip: text;
     color: transparent;
-    animation: hologram 3s infinite;
+    animation: hologram 3s infinite linear;
     text-align: center;
+    display: inline-block;
+    font-size: 32px;
+    font-weight: 700;
 }
 
 @keyframes hologram {
@@ -134,8 +128,9 @@ h2 {
     align-items: center;
     gap: 15px;
     width: 100%;
-    max-width: 600px;
+    max-width: 800px;
     margin: 0 auto;
+    justify-content: center;
 }
 
 .query-form {
@@ -143,7 +138,7 @@ h2 {
     flex-direction: row;
     gap: 10px;
     width: 100%;
-    max-width: 600px;
+    max-width: 800px;
     justify-content: center;
     align-items: center;
 }
@@ -151,15 +146,21 @@ h2 {
 .neon-form {
     position: relative;
     border: 2px solid var(--neon-color);
-    box-shadow: 0 0 15px var(--neon-color);
+    box-shadow: 0 0 10px var(--neon-color);
     animation: neonPulse 1.5s infinite alternate;
     padding: 15px;
     border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    max-width: 800px;
 }
 
 @keyframes neonPulse {
-    from { box-shadow: 0 0 10px var(--neon-color); }
-    to { box-shadow: 0 0 20px var(--neon-color), 0 0 30px var(--neon-color); }
+    from { box-shadow: 0 0 5px var(--neon-color); }
+    to { box-shadow: 0 0 15px var(--neon-color); }
 }
 
 .search-input {
@@ -202,6 +203,8 @@ textarea.search-input {
     background: #666;
     position: relative;
     overflow: hidden;
+    display: block;
+    margin: 10px auto;
 }
 
 .glow-button {
@@ -331,6 +334,10 @@ tr:hover {
     }
     td[data-label="描述"] {
         max-width: 150px;
+    }
+    .search-box, .neon-form {
+        max-width: 100%;
+        margin: 0 auto;
     }
 }
 

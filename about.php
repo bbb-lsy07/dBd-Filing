@@ -48,6 +48,7 @@ $settings = $db->querySingle("SELECT * FROM settings", true);
         <br>
         <a href="<?php echo htmlspecialchars($settings['site_url'] ?? ''); ?>/query.php?keyword=20240001" target="_blank">联bBb盟 icp备20240001号</a>
     </div>
+    <?php echo getFooterText(); ?>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             document.body.classList.add('loaded');

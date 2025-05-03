@@ -5,10 +5,19 @@ $db = init_database();
 
 if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true || !isset($_SESSION['admin_id']) || (isset($_SESSION['user_role']) && $_SESSION['user_role'] !== 'admin')) {
     header("HTTP/1.1 403 Forbidden");
-    exit("权限不足");
+    echo '<script>alert("权限不足，请重新登录！"); window.location.href = "login.php";</script>';
+    exit();
 }
 
 $settings = $db->querySingle("SELECT * FROM settings", true);
+$settings = $settings ?: [
+    'site_title' => '联bBb盟 ICP 备案系统',
+    'site_url' => 'https://icp.bbb-lsy07.my',
+    'welcome_message' => '这是一个虚拟备案系统，仅供娱乐和社区互动使用，非官方备案。',
+    'contact_email' => 'admin@bbb-lsy07.my',
+    'qq_group' => '123456789',
+    'background_image' => 'https://www.dmoe.cc/random.php'
+];
 require_once 'send_mail.php';
 
 if (isset($_GET['delete'])) {
@@ -26,8 +35,8 @@ if (isset($_GET['approve'])) {
     $stmt = $db->prepare("SELECT * FROM filings WHERE id = :id");
     $stmt->bindValue(':id', (int)$_GET['approve'], SQLITE3_INTEGER);
     $filing = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
-    $subject = "您的备案已通过审核 - " . ($settings['site_title'] ?? '');
-    $body = "<h2>备案审核通过</h2><p>您的网站 <strong>" . htmlspecialchars($filing['website_name']) . "</strong> 的备案申请已通过审核。</p><p>备案号：联bBb盟 icp备" . htmlspecialchars($filing['filing_number']) . "</p><p>请将以下代码添加到您的网站页脚：</p><pre><a href='" . htmlspecialchars($settings['site_url']) . "/query.php?keyword=" . htmlspecialchars($filing['filing_number']) . "' target='_blank'>联bBb盟 icp备" . htmlspecialchars($filing['filing_number']) . "</a></pre>";
+    $subject = "你的备案已通过审核 - " . ($settings['site_title'] ?? '');
+    $body = "<h2>备案审核通过</h2><p>你的网站 <strong>" . htmlspecialchars($filing['website_name']) . "</strong> 的备案申请已通过审核。</p><p>备案号：联bBb盟 icp备" . htmlspecialchars($filing['filing_number']) . "</p><p>请将以下代码添加到你的网站页脚：</p><pre><a href='" . htmlspecialchars($settings['site_url']) . "/query.php?keyword=" . htmlspecialchars($filing['filing_number']) . "' target='_blank'>联bBb盟 icp备" . htmlspecialchars($filing['filing_number']) . "</a></pre>";
     if (!sendMail($filing['contact_email'], $subject, $body)) {
         $mail_error = "邮件发送失败，请手动通知用户";
     }
@@ -42,8 +51,8 @@ if (isset($_GET['reject'])) {
     $stmt = $db->prepare("SELECT * FROM filings WHERE id = :id");
     $stmt->bindValue(':id', (int)$_GET['reject'], SQLITE3_INTEGER);
     $filing = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
-    $subject = "您的备案未通过审核 - " . ($settings['site_title'] ?? '');
-    $body = "<h2>备案审核未通过</h2><p>您的网站 <strong>" . htmlspecialchars($filing['website_name']) . "</strong> 的备案申请未通过审核。</p><p>请检查信息后重新提交。</p>";
+    $subject = "你的备案未通过审核 - " . ($settings['site_title'] ?? '');
+    $body = "<h2>备案审核未通过</h2><p>你的网站 <strong>" . htmlspecialchars($filing['website_name']) . "</strong> 的备案申请未通过审核。</p><p>请检查信息后重新提交。</p>";
     if (!sendMail($filing['contact_email'], $subject, $body)) {
         $mail_error = "邮件发送失败，请手动通知用户";
     }
@@ -60,6 +69,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['new_username'])) {
         $stmt->execute();
         $update_message = "账户信息已更新，请重新登录！";
         session_destroy();
+        echo '<script>alert("账户信息已更新，请重新登录！"); window.location.href = "login.php";</script>';
+        exit;
     } else {
         $update_error = "两次输入的密码不一致！";
     }
@@ -81,6 +92,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['site_title'])) {
     $stmt->execute();
     $settings_update_message = "站点设置已更新！";
     $settings = $db->querySingle("SELECT * FROM settings", true);
+    $settings = $settings ?: [
+        'site_title' => '联bBb盟 ICP 备案系统',
+        'site_url' => 'https://icp.bbb-lsy07.my',
+        'welcome_message' => '这是一个虚拟备案系统，仅供娱乐和社区互动使用，非官方备案。',
+        'contact_email' => 'admin@bbb-lsy07.my',
+        'qq_group' => '123456789',
+        'background_image' => 'https://www.dmoe.cc/random.php'
+    ];
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_from_github'])) {
+    $files = ['admin.php', 'common.php', 'travel.php', 'login.php', 'style.css'];
+    $success = true;
+    foreach ($files as $file) {
+        $url = "https://raw.githubusercontent.com/bbb-lsy07/dBd-Filing/main/$file";
+        $content = @file_get_contents($url);
+        if ($content === false) {
+            $success = false;
+            continue;
+        }
+        if (@file_put_contents($file, $content) === false) {
+            $success = false;
+        }
+    }
+    if ($success) {
+        $db->close();
+        $db = init_database();
+        $update_message = "系统更新成功！版本已同步至：" . APP_VERSION;
+        echo '<script>window.location.reload(true);</script>';
+        exit;
+    } else {
+        $update_error = "系统更新失败，请检查网络连接或重试。";
+    }
 }
 
 $results = $db->query("SELECT * FROM filings ORDER BY submission_date DESC");
@@ -91,12 +135,12 @@ $results = $db->query("SELECT * FROM filings ORDER BY submission_date DESC");
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
-    <title>后台管理 - <?php echo htmlspecialchars($settings['site_title'] ?? ''); ?></title>
+    <title>后台管理 - <?php echo htmlspecialchars($settings['site_title']); ?></title>
     <link rel="icon" href="https://www.dmoe.cc/favicon.ico" type="image/x-icon">
     <link rel="stylesheet" href="style.css">
     <style>
         body {
-            background-image: url('<?php echo htmlspecialchars($settings['background_image'] ?? 'https://www.dmoe.cc/random.php'); ?>');
+            background-image: url('<?php echo htmlspecialchars($settings['background_image']); ?>');
         }
     </style>
 </head>
@@ -104,16 +148,19 @@ $results = $db->query("SELECT * FROM filings ORDER BY submission_date DESC");
     <div class="github-corner">
         <a href="https://github.com/bbb-lsy07/dBd-Filing" target="_blank" class="github-link">开源地址</a>
     </div>
-    <div class="container page-transition">
+    <div class="container">
         <div class="header">
             <h1 class="holographic-text">后台管理</h1>
             <p>欢迎，管理员！ 
                 <a href="#" class="modify-link" onclick="document.getElementById('modifyModal').style.display='flex'">修改账户</a>
                 <a href="#" class="modify-link" onclick="document.getElementById('settingsModal').style.display='flex'">站点设置</a>
+                <a href="#" class="modify-link" onclick="document.getElementById('githubModal').style.display='flex'">更新系统</a>
                 <a href="logout.php" class="logout-link">退出登录</a>
             </p>
             <?php if (isset($settings_update_message)) echo "<p class='success'>$settings_update_message</p>"; ?>
             <?php if (isset($mail_error)) echo "<p class='error'>$mail_error</p>"; ?>
+            <?php if (isset($update_message)) echo "<p class='success'>$update_message</p>"; ?>
+            <?php if (isset($update_error)) echo "<p class='error'>$update_error</p>"; ?>
         </div>
         <div class="table-wrapper card-effect">
             <table>
@@ -155,14 +202,8 @@ $results = $db->query("SELECT * FROM filings ORDER BY submission_date DESC");
         </div>
     </div>
     <div class="footer">
-        <a href="index.php">主页</a>
-        <a href="about.php">关于</a>
-        <a href="join.php">加入</a>
-        <a href="change.php">变更</a>
-        <a href="public.php">公示</a>
-        <a href="travel.php">迁跃</a>
-        <br>
-        <a href="<?php echo htmlspecialchars($settings['site_url'] ?? ''); ?>/query.php?keyword=20240001" target="_blank">联bBb盟 icp备20240001号</a>
+        <?php echo getFooterText(); ?>
+        <a href="<?php echo htmlspecialchars($settings['site_url']); ?>/query.php?keyword=20240001" target="_blank">联bBb盟 icp备20240001号</a>
     </div>
     <div id="modifyModal" class="modal" style="display: none;">
         <div class="modal-content card-effect">
@@ -186,12 +227,12 @@ $results = $db->query("SELECT * FROM filings ORDER BY submission_date DESC");
             <span class="close" onclick="document.getElementById('settingsModal').style.display='none'">×</span>
             <h2>站点设置</h2>
             <form action="admin.php" method="POST" class="neon-form">
-                <input type="text" name="site_title" class="search-input" value="<?php echo htmlspecialchars($settings['site_title'] ?? ''); ?>" placeholder="请输入站点标题（如：联bBb盟 ICP 备案系统）" required>
-                <input type="url" name="site_url" class="search-input" value="<?php echo htmlspecialchars($settings['site_url'] ?? ''); ?>" placeholder="请输入站点URL（如：https://icp.bbb-lsy07.my）" required>
-                <textarea name="welcome_message" class="search-input" placeholder="请输入欢迎信息（如：这是一个虚拟备案系统）" required><?php echo htmlspecialchars($settings['welcome_message'] ?? ''); ?></textarea>
-                <input type="email" name="contact_email" class="search-input" value="<?php echo htmlspecialchars($settings['contact_email'] ?? ''); ?>" placeholder="请输入联系邮箱（如：admin@bbb-lsy07.my）" required>
-                <input type="text" name="qq_group" class="search-input" value="<?php echo htmlspecialchars($settings['qq_group'] ?? ''); ?>" placeholder="请输入QQ群号（如：123456789）" required>
-                <input type="url" name="background_image" class="search-input" value="<?php echo htmlspecialchars($settings['background_image'] ?? ''); ?>" placeholder="请输入背景图URL（如：https://www.dmoe.cc/random.php）" required>
+                <input type="text" name="site_title" class="search-input" value="<?php echo htmlspecialchars($settings['site_title']); ?>" placeholder="请输入站点标题（如：联bBb盟 ICP 备案系统）" required>
+                <input type="url" name="site_url" class="search-input" value="<?php echo htmlspecialchars($settings['site_url']); ?>" placeholder="请输入站点URL（如：https://icp.bbb-lsy07.my）" required>
+                <textarea name="welcome_message" class="search-input" placeholder="请输入欢迎信息（如：这是一个虚拟备案系统）" required><?php echo htmlspecialchars($settings['welcome_message']); ?></textarea>
+                <input type="email" name="contact_email" class="search-input" value="<?php echo htmlspecialchars($settings['contact_email']); ?>" placeholder="请输入联系邮箱（如：admin@bbb-lsy07.my）" required>
+                <input type="text" name="qq_group" class="search-input" value="<?php echo htmlspecialchars($settings['qq_group']); ?>" placeholder="请输入QQ群号（如：123456789）" required>
+                <input type="url" name="background_image" class="search-input" value="<?php echo htmlspecialchars($settings['background_image']); ?>" placeholder="请输入背景图URL（如：https://www.dmoe.cc/random.php）" required>
                 <h3>SMTP 设置</h3>
                 <input type="text" name="smtp_host" class="search-input" value="<?php echo htmlspecialchars($settings['smtp_host'] ?? ''); ?>" placeholder="SMTP 服务器（如：smtp.gmail.com）">
                 <input type="number" name="smtp_port" class="search-input" value="<?php echo htmlspecialchars($settings['smtp_port'] ?? ''); ?>" placeholder="SMTP 端口（如：587）">
@@ -208,44 +249,43 @@ $results = $db->query("SELECT * FROM filings ORDER BY submission_date DESC");
             </form>
         </div>
     </div>
+    <div id="githubModal" class="modal" style="display: none;">
+        <div class="modal-content card-effect">
+            <span class="close" onclick="document.getElementById('githubModal').style.display='none'">×</span>
+            <h2>系统更新</h2>
+            <form action="admin.php" method="POST" class="neon-form">
+                <input type="hidden" name="update_from_github" value="1">
+                <button type="submit" class="search-button glow-button">
+                    <span>从GitHub更新</span>
+                    <div class="glow"></div>
+                </button>
+            </form>
+        </div>
+    </div>
     <script>
         window.onclick = function(event) {
-            ['modifyModal', 'settingsModal'].forEach(id => {
+            ['modifyModal', 'settingsModal', 'githubModal'].forEach(id => {
                 let modal = document.getElementById(id);
                 if (event.target == modal) modal.style.display = "none";
             });
-        }
+        };
         document.addEventListener('DOMContentLoaded', () => {
-            document.body.classList.add('loaded');
-            // Dynamically adjust container height to ensure header visibility
-            const container = document.querySelector('.container');
-            const header = document.querySelector('.header');
-            const tableWrapper = document.querySelector('.table-wrapper');
-            function adjustContainerHeight() {
-                const headerHeight = header.offsetHeight;
-                const windowHeight = window.innerHeight;
-                const footerHeight = document.querySelector('.footer').offsetHeight;
-                const availableHeight = windowHeight - footerHeight - 40; // Account for padding
-                container.style.minHeight = `${availableHeight}px`;
-                tableWrapper.style.maxHeight = `${availableHeight - headerHeight - 60}px`;
-            }
-            adjustContainerHeight();
-            window.addEventListener('resize', adjustContainerHeight);
-        });
-        document.querySelectorAll('a').forEach(link => {
-            link.addEventListener('click', (e) => {
-                e.preventDefault();
-                document.body.classList.remove('loaded');
-                setTimeout(() => {
-                    window.location = e.target.href;
-                }, 300);
-            });
-        });
-        document.querySelectorAll('form').forEach(form => {
-            form.addEventListener('submit', () => {
-                form.style.transform = 'scale(0.98)';
-                setTimeout(() => form.style.transform = '', 200);
-            });
+            setTimeout(() => {
+                document.body.classList.add('loaded');
+                const container = document.querySelector('.container');
+                const header = document.querySelector('.header');
+                const tableWrapper = document.querySelector('.table-wrapper');
+                function adjustContainerHeight() {
+                    const headerHeight = header.offsetHeight;
+                    const windowHeight = window.innerHeight;
+                    const footerHeight = document.querySelector('.footer').offsetHeight;
+                    const availableHeight = windowHeight - footerHeight - 40;
+                    container.style.minHeight = `${availableHeight}px`;
+                    tableWrapper.style.maxHeight = `${availableHeight - headerHeight - 60}px`;
+                }
+                adjustContainerHeight();
+                window.addEventListener('resize', adjustContainerHeight);
+            }, 50);
         });
     </script>
 </body>

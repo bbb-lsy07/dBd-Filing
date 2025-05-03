@@ -88,18 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reset_password'])) {
         <a href="<?php echo htmlspecialchars($settings['site_url'] ?? ''); ?>/query.php?keyword=20240001" target="_blank">联bBb盟 icp备20240001号</a>
     </div>
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            document.body.classList.add('loaded');
-        });
-        document.querySelectorAll('a').forEach(link => {
-            link.addEventListener('click', (e) => {
-                e.preventDefault();
-                document.body.classList.remove('loaded');
-                setTimeout(() => {
-                    window.location = e.target.href;
-                }, 300);
-            });
-        });
+        
         document.querySelectorAll('form').forEach(form => {
             form.addEventListener('submit', () => {
                 form.style.transform = 'scale(0.98)';

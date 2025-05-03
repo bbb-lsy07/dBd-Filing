@@ -19,6 +19,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $stmt->bindValue(':id', $id, SQLITE3_INTEGER);
     $result = $stmt->execute();
 
+    // 验证 CSRF token
+if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+    $error_message = 'CSRF 验证失败，请重试！';
+} else {
     if ($result) {
         $stmt = $db->prepare("SELECT filing_number FROM filings WHERE id = :id");
         $stmt->bindValue(':id', (int)$id, SQLITE3_INTEGER);
@@ -31,6 +35,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } else {
         $error_message = "变更申请提交失败，请稍后重试！";
+    }
+}
     }
 } else {
     header("Location: change.php");

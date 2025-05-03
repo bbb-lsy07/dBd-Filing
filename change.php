@@ -1,7 +1,21 @@
 <?php
+session_start();
 require_once 'common.php';
 $db = init_database();
 $settings = $db->querySingle("SELECT * FROM settings", true);
+$settings = $settings ?: [
+    'site_title' => '联bBb盟 ICP 备案系统',
+    'site_url' => 'https://icp.bbb-lsy07.my',
+    'welcome_message' => '这是一个虚拟备案系统，仅供娱乐和社区互动使用，非官方备案。',
+    'contact_email' => 'admin@bbb-lsy07.my',
+    'qq_group' => '123456789',
+    'background_image' => 'https://www.dmoe.cc/random.php'
+];
+
+if (!isset($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+$csrf_token = $_SESSION['csrf_token'];
 ?>
 
 <!DOCTYPE html>
@@ -10,8 +24,8 @@ $settings = $db->querySingle("SELECT * FROM settings", true);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
     <meta name="description" content="变更您的联bBb盟 ICP 备案信息。">
-    <meta name="keywords" content="变更ICP备案, 虚拟备案, <?php echo htmlspecialchars($settings['site_title'] ?? ''); ?>">
-    <title>变更 - <?php echo htmlspecialchars($settings['site_title'] ?? ''); ?></title>
+    <meta name="keywords" content="变更ICP备案, 虚拟备案, <?php echo htmlspecialchars($settings['site_title']); ?>">
+    <title>变更 - <?php echo htmlspecialchars($settings['site_title']); ?></title>
     <link rel="icon" href="https://www.dmoe.cc/favicon.ico" type="image/x-icon">
     <link rel="stylesheet" href="style.css">
 </head>
@@ -38,10 +52,9 @@ $settings = $db->querySingle("SELECT * FROM settings", true);
                 $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
                 if ($row): ?>
                     <form action="process_change.php" method="POST" class="neon-form">
+                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
                         <input type="hidden" name="id" value="<?php echo $row['id']; ?>">
-                        <input type="text" name="website_name" class="search-input" value="<?php
-
- echo htmlspecialchars($row['website_name']); ?>" required>
+                        <input type="text" name="website_name" class="search-input" value="<?php echo htmlspecialchars($row['website_name']); ?>" required>
                         <input type="url" name="website_url" class="search-input" value="<?php echo htmlspecialchars($row['website_url']); ?>" required>
                         <textarea name="description" class="search-input" required><?php echo htmlspecialchars($row['description']); ?></textarea>
                         <input type="email" name="contact_email" class="search-input" value="<?php echo htmlspecialchars($row['contact_email']); ?>" required>
@@ -63,14 +76,25 @@ $settings = $db->querySingle("SELECT * FROM settings", true);
         <a href="change.php">变更</a>
         <a href="public.php">公示</a>
         <a href="travel.php">迁跃</a>
-        <br>
-        <a href="<?php echo htmlspecialchars($settings['site_url'] ?? ''); ?>/query.php?keyword=20240001" target="_blank">联bBb盟 icp备20240001号</a>
+        <?php echo getFooterText(); ?>
     </div>
     <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            document.body.classList.add('loaded');
+        });
         document.querySelectorAll('form').forEach(form => {
             form.addEventListener('submit', () => {
                 form.style.transform = 'scale(0.98)';
                 setTimeout(() => form.style.transform = '', 200);
+            });
+        });
+        document.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                document.body.classList.remove('loaded');
+                setTimeout(() => {
+                    window.location = e.target.href;
+                }, 300);
             });
         });
     </script>

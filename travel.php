@@ -56,34 +56,93 @@ $recent_logs = $db->query("SELECT * FROM travel_logs ORDER BY travel_time DESC L
     <link rel="stylesheet" href="style.css">
     <style>
         body {
-            background-image: url('<?php echo htmlspecialchars($settings['background_image'] ?? 'https://www.dmoe.cc/random.php'); ?>');
+            background: linear-gradient(135deg, #000428, #004e92);
+            background-image: url('<?php echo htmlspecialchars($settings['background_image'] ?? 'https://www.dmoe.cc/random.php'); ?>'), linear-gradient(135deg, #000428, #004e92);
+            background-blend-mode: overlay;
             overflow-x: hidden;
+            animation: spacePulse 15s infinite alternate;
+            position: relative;
+        }
+        #space-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+        }
+        @keyframes spacePulse {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 100% 50%; }
         }
         .travel-container {
+            min-height: 60vh;
             max-height: 80vh;
             overflow-y: auto;
             padding-bottom: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 20px;
+            box-shadow: 0 0 30px rgba(0, 191, 255, 0.5);
         }
         .travel-info {
             max-width: 600px;
-            margin: 0 auto 20px;
+            margin: 20px auto;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 15px;
+            border: 1px solid rgba(0, 191, 255, 0.3);
+            box-shadow: 0 0 20px rgba(0, 191, 255, 0.3);
+            transition: all 0.3s ease;
+        }
+        .travel-info:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 0 30px rgba(0, 191, 255, 0.7);
         }
         .table-wrapper {
             max-height: 300px;
             overflow-y: auto;
             margin: 0 auto;
             max-width: 600px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
         }
         .particle {
-            position: absolute;
+            position: fixed;
             width: 2px;
             height: 2px;
             background: #FFFFFF;
             border-radius: 50%;
-            animation: float 5s infinite;
+            animation: float 5s infinite, twinkle 2s infinite alternate;
             left: <?php echo rand(0, 100); ?>%;
             top: <?php echo rand(0, 100); ?>%;
             animation-delay: <?php echo rand(0, 5000); ?>ms;
+        }
+        @keyframes twinkle {
+            0% { opacity: 0.3; }
+            100% { opacity: 1; }
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            background: rgba(0, 0, 0, 0.3);
+        }
+        table, th, td {
+            border: 1px solid rgba(0, 191, 255, 0.5);
+        }
+        th {
+            background: rgba(0, 191, 255, 0.2);
+        }
+        tr:hover {
+            background: rgba(0, 191, 255, 0.1);
+        }
+        #countdown {
+            color: #00BFFF;
+            font-weight: bold;
+            animation: pulse 1s infinite alternate;
+        }
+        @keyframes pulse {
+            0% { text-shadow: 0 0 5px #00BFFF; }
+            100% { text-shadow: 0 0 15px #00BFFF, 0 0 20px #00BFFF; }
         }
     </style>
 </head>
@@ -102,11 +161,28 @@ $recent_logs = $db->query("SELECT * FROM travel_logs ORDER BY travel_time DESC L
             </div>
         <?php else: ?>
             <div class="travel-info card-effect">
+                <h2 class="holographic-text"><?php echo htmlspecialchars($website['website_name']); ?></h2>
                 <p><strong>探险者编号：</strong> <?php echo htmlspecialchars($travel_number); ?></p>
-                <p><strong>传送目标：</strong> <?php echo htmlspecialchars($target_name); ?> - <?php echo htmlspecialchars($website['website_name']); ?></p>
+                <p><strong>传送目标：</strong> <?php echo htmlspecialchars($target_name); ?></p>
                 <p><strong>目标地址：</strong> <a href="<?php echo htmlspecialchars($website['website_url']); ?>" target="_blank"><?php echo htmlspecialchars($website['website_url']); ?></a></p>
                 <p><strong>引用文字：</strong> "穿越星河，只为遇见未知的你。"</p>
                 <p>即将在 <span id="countdown">10</span> 秒后到达！</p>
+                
+                <div class="rating-system">
+                    <p>给这次探索评分:</p>
+                    <div class="stars">
+                        <?php for ($i = 1; $i <= 5; $i++): ?>
+                            <span class="star" data-rating="<?php echo $i; ?>">★</span>
+                        <?php endfor; ?>
+                    </div>
+                    <p class="rating-result"></p>
+                </div>
+                
+                <div class="share-buttons">
+                    <button class="share-btn" data-platform="twitter">分享到Twitter</button>
+                    <button class="share-btn" data-platform="facebook">分享到Facebook</button>
+                    <button class="copy-link">复制链接</button>
+                </div>
             </div>
         <?php endif; ?>
         <div class="travel-info card-effect">
@@ -123,17 +199,17 @@ $recent_logs = $db->query("SELECT * FROM travel_logs ORDER BY travel_time DESC L
                                 <th>网站地址</th>
                                 <th>迁跃时间</th>
                             </tr>
+                            <tbody>
+                                <?php while ($row = $recent_logs->fetchArray(SQLITE3_ASSOC)): ?>
+                                    <tr>
+                                        <td><?php echo htmlspecialchars($row['travel_number']); ?></td>
+                                        <td><?php echo htmlspecialchars($row['website_name']); ?></td>
+                                        <td><a href="<?php echo htmlspecialchars($row['website_url']); ?>" target="_blank"><?php echo htmlspecialchars($row['website_url']); ?></a></td>
+                                        <td><?php echo htmlspecialchars($row['travel_time']); ?></td>
+                                    </tr>
+                                <?php endwhile; ?>
+                            </tbody>
                         </thead>
-                        <tbody>
-                            <?php while ($row = $recent_logs->fetchArray(SQLITE3_ASSOC)): ?>
-                                <tr>
-                                    <td><?php echo htmlspecialchars($row['travel_number']); ?></td>
-                                    <td><?php echo htmlspecialchars($row['website_name']); ?></td>
-                                    <td><a href="<?php echo htmlspecialchars($row['website_url']); ?>" target="_blank"><?php echo htmlspecialchars($row['website_url']); ?></a></td>
-                                    <td><?php echo htmlspecialchars($row['travel_time']); ?></td>
-                                </tr>
-                            <?php endwhile; ?>
-                        </tbody>
                     </table>
                 </div>
             <?php endif; ?>
@@ -167,7 +243,7 @@ $recent_logs = $db->query("SELECT * FROM travel_logs ORDER BY travel_time DESC L
                 const headerHeight = header.offsetHeight;
                 const footerHeight = footer.offsetHeight;
                 const windowHeight = window.innerHeight;
-                const availableHeight = windowHeight - footerHeight - 40;
+                const availableHeight = windowHeight - headerHeight - footerHeight - 40;
                 container.style.minHeight = `${Math.min(availableHeight, windowHeight * 0.8)}px`;
                 if (tableWrapper) {
                     tableWrapper.style.maxHeight = `${availableHeight - headerHeight - 100}px`;
@@ -199,5 +275,55 @@ $recent_logs = $db->query("SELECT * FROM travel_logs ORDER BY travel_time DESC L
             }
         });
     </script>
+<canvas id="space-canvas"></canvas>
+<script>
+    // 3D星空背景
+    const canvas = document.getElementById('space-canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    // 创建星星
+    const stars = [];
+    for (let i = 0; i < 200; i++) {
+        stars.push({
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height,
+            radius: Math.random() * 1.5,
+            speed: Math.random() * 0.2,
+            opacity: Math.random()
+        });
+    }
+
+    // 动画循环
+    function animate() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // 更新和绘制星星
+        stars.forEach(star => {
+            star.y += star.speed;
+            if (star.y > canvas.height) {
+                star.y = 0;
+                star.x = Math.random() * canvas.width;
+            }
+            
+            ctx.beginPath();
+            ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255, 255, 255, ${star.opacity})`;
+            ctx.fill();
+        });
+        
+        requestAnimationFrame(animate);
+    }
+    
+    animate();
+    
+    // 响应窗口大小变化
+    window.addEventListener('resize', () => {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    });
+</script>
+<?php getFooterText();?>
 </body>
 </html>

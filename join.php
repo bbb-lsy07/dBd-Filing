@@ -79,5 +79,6 @@ $settings = $db->querySingle("SELECT * FROM settings", true);
             });
         });
     </script>
+    <?php echo getFooterText();?>
 </body>
 </html>
