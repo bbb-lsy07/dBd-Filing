@@ -181,7 +181,7 @@ h2 {
     border-color: #999;
 }
 
-.search-input[type="text"], .search-input[type="url"], .search-input[type="email"], .search-input[type="password"] {
+.search-input[type="text"], .search-input[type="url"], .search-input[type="email"], .search-input[type="password"], .search-input[type="number"], select.search-input {
     height: 45px;
 }
 
@@ -527,4 +527,27 @@ tr:hover {
     0% { transform: translateY(0); opacity: 0.7; }
     50% { opacity: 0.3; }
     100% { transform: translateY(-100vh); opacity: 0; }
+}
+
+progress {
+    width: 100%;
+    height: 20px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+}
+
+progress::-webkit-progress-bar {
+    background: var(--glass-bg);
+    border-radius: 10px;
+}
+
+progress::-webkit-progress-value {
+    background: var(--neon-color);
+    border-radius: 10px;
+}
+
+progress::-moz-progress-bar {
+    background: var(--neon-color);
+    border-radius: 10px;
 }

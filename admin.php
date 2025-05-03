@@ -20,6 +20,11 @@ $settings = $settings ?: [
 ];
 require_once 'send_mail.php';
 
+if (!isset($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+$csrf_token = $_SESSION['csrf_token'];
+
 if (isset($_GET['delete'])) {
     $stmt = $db->prepare("DELETE FROM filings WHERE id = :id");
     $stmt->bindValue(':id', (int)$_GET['delete'], SQLITE3_INTEGER);
@@ -92,39 +97,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['site_title'])) {
     $stmt->execute();
     $settings_update_message = "站点设置已更新！";
     $settings = $db->querySingle("SELECT * FROM settings", true);
-    $settings = $settings ?: [
-        'site_title' => '联bBb盟 ICP 备案系统',
-        'site_url' => 'https://icp.bbb-lsy07.my',
-        'welcome_message' => '这是一个虚拟备案系统，仅供娱乐和社区互动使用，非官方备案。',
-        'contact_email' => 'admin@bbb-lsy07.my',
-        'qq_group' => '123456789',
-        'background_image' => 'https://www.dmoe.cc/random.php'
-    ];
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_from_github'])) {
-    $files = ['admin.php', 'common.php', 'travel.php', 'login.php', 'style.css'];
-    $success = true;
-    foreach ($files as $file) {
-        $url = "https://raw.githubusercontent.com/bbb-lsy07/dBd-Filing/main/$file";
-        $content = @file_get_contents($url);
-        if ($content === false) {
-            $success = false;
-            continue;
-        }
-        if (@file_put_contents($file, $content) === false) {
-            $success = false;
-        }
-    }
-    if ($success) {
-        $db->close();
-        $db = init_database();
-        $update_message = "系统更新成功！版本已同步至：" . APP_VERSION;
-        echo '<script>window.location.reload(true);</script>';
-        exit;
-    } else {
-        $update_error = "系统更新失败，请检查网络连接或重试。";
-    }
 }
 
 $results = $db->query("SELECT * FROM filings ORDER BY submission_date DESC");
@@ -135,14 +107,11 @@ $results = $db->query("SELECT * FROM filings ORDER BY submission_date DESC");
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
+    <meta name="description" content="管理员面板 - <?php echo htmlspecialchars($settings['site_title']); ?>">
+    <meta name="keywords" content="管理员面板, ICP备案, <?php echo htmlspecialchars($settings['site_title']); ?>">
     <title>后台管理 - <?php echo htmlspecialchars($settings['site_title']); ?></title>
     <link rel="icon" href="https://www.dmoe.cc/favicon.ico" type="image/x-icon">
     <link rel="stylesheet" href="style.css">
-    <style>
-        body {
-            background-image: url('<?php echo htmlspecialchars($settings['background_image']); ?>');
-        }
-    </style>
 </head>
 <body>
     <div class="github-corner">
@@ -212,6 +181,7 @@ $results = $db->query("SELECT * FROM filings ORDER BY submission_date DESC");
             <?php if (isset($update_message)) echo "<p class='success'>$update_message</p>"; ?>
             <?php if (isset($update_error)) echo "<p class='error'>$update_error</p>"; ?>
             <form action="admin.php" method="POST" class="neon-form">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
                 <input type="text" name="new_username" class="search-input" placeholder="请输入新用户名" required>
                 <input type="password" name="new_password" class="search-input" placeholder="请输入新密码" required>
                 <input type="password" name="confirm_password" class="search-input" placeholder="请再次输入新密码" required>
@@ -227,6 +197,7 @@ $results = $db->query("SELECT * FROM filings ORDER BY submission_date DESC");
             <span class="close" onclick="document.getElementById('settingsModal').style.display='none'">×</span>
             <h2>站点设置</h2>
             <form action="admin.php" method="POST" class="neon-form">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
                 <input type="text" name="site_title" class="search-input" value="<?php echo htmlspecialchars($settings['site_title']); ?>" placeholder="请输入站点标题（如：联bBb盟 ICP 备案系统）" required>
                 <input type="url" name="site_url" class="search-input" value="<?php echo htmlspecialchars($settings['site_url']); ?>" placeholder="请输入站点URL（如：https://icp.bbb-lsy07.my）" required>
                 <textarea name="welcome_message" class="search-input" placeholder="请输入欢迎信息（如：这是一个虚拟备案系统）" required><?php echo htmlspecialchars($settings['welcome_message']); ?></textarea>
@@ -253,13 +224,15 @@ $results = $db->query("SELECT * FROM filings ORDER BY submission_date DESC");
         <div class="modal-content card-effect">
             <span class="close" onclick="document.getElementById('githubModal').style.display='none'">×</span>
             <h2>系统更新</h2>
-            <form action="admin.php" method="POST" class="neon-form">
-                <input type="hidden" name="update_from_github" value="1">
+            <form id="update-form" class="neon-form">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
                 <button type="submit" class="search-button glow-button">
                     <span>从GitHub更新</span>
                     <div class="glow"></div>
                 </button>
             </form>
+            <progress id="update-progress" max="100" value="0" style="width: 100%; height: 20px; margin-top: 10px;"></progress>
+            <div id="update-status" class="result"></div>
         </div>
     </div>
     <script>
@@ -285,6 +258,56 @@ $results = $db->query("SELECT * FROM filings ORDER BY submission_date DESC");
                 }
                 adjustContainerHeight();
                 window.addEventListener('resize', adjustContainerHeight);
+
+                const form = document.getElementById('update-form');
+                const progress = document.getElementById('update-progress');
+                const status = document.getElementById('update-status');
+
+                form.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    progress.value = 0;
+                    status.textContent = '开始更新...';
+                    status.className = 'result';
+
+                    try {
+                        const response = await fetch('process_update.php', {
+                            method: 'POST',
+                            body: new FormData(form)
+                        });
+                        const reader = response.body.getReader();
+                        let receivedLength = 0;
+                        let chunks = [];
+
+                        while (true) {
+                            const { done, value } = await reader.read();
+                            if (done) break;
+                            chunks.push(value);
+                            receivedLength += value.length;
+                            const text = new TextDecoder().decode(new Uint8Array(chunks.flat()));
+                            const lines = text.split('\n');
+                            for (const line of lines) {
+                                if (line.startsWith('data: ')) {
+                                    const data = JSON.parse(line.substring(6));
+                                    progress.value = data.progress;
+                                    status.textContent = data.message;
+                                    if (data.progress === 100 && !data.error) {
+                                        status.className = 'success';
+                                        status.textContent = data.message || '更新成功！';
+                                    }
+                                }
+                            }
+                        }
+
+                        const finalText = new TextDecoder().decode(new Uint8Array(chunks.flat()));
+                        if (finalText.includes('error')) {
+                            status.className = 'error';
+                            status.textContent = '更新失败：' + finalText.match(/error: (.*?)(?:\n|$)/)?.[1] || '未知错误';
+                        }
+                    } catch (error) {
+                        status.className = 'error';
+                        status.textContent = '更新失败：' + error.message;
+                    }
+                });
             }, 50);
         });
     </script>
