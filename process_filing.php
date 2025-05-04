@@ -1,10 +1,11 @@
 <?php
 session_start();
 require_once 'common.php';
+require_once 'send_mail.php';
+
 $db = init_database();
 $settings = $db->querySingle("SELECT * FROM settings", true);
 $site_url = $settings['site_url'] ?? 'https://icp.bbb-lsy07.my';
-require_once 'send_mail.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // 验证 CSRF token
@@ -15,23 +16,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $website_url = htmlspecialchars($_POST['website_url']);
         $description = htmlspecialchars($_POST['description']);
         $contact_email = htmlspecialchars($_POST['contact_email']);
-        
-        if (isset($_POST['icp_number']) && preg_match('/^\d{8}$/', $_POST['icp_number'])) {
-            $filing_number = htmlspecialchars($_POST['icp_number']);
-            $stmt = $db->prepare("SELECT COUNT(*) FROM filings WHERE filing_number = :filing_number");
-            $stmt->bindValue(':filing_number', $filing_number, SQLITE3_TEXT);
-            $check = $stmt->execute()->fetchArray(SQLITE3_NUM)[0];
-            if ($check > 0) {
-                $year = date('Y');
-                $random = str_pad(rand(0, 9999), 4, '0', STR_PAD_LEFT);
-                $filing_number = $year . $random;
-            }
-        } else {
-            $year = date('Y');
+
+        // 生成备案号（年份 + 4位随机数）
+        $year = date('Y');
+        $random = str_pad(rand(0, 9999), 4, '0', STR_PAD_LEFT);
+        $filing_number = $year . $random;
+
+        // 检查备案号是否重复
+        $stmt = $db->prepare("SELECT COUNT(*) FROM filings WHERE filing_number = :filing_number");
+        $stmt->bindValue(':filing_number', $filing_number, SQLITE3_TEXT);
+        $check = $stmt->execute()->fetchArray(SQLITE3_NUM)[0];
+        while ($check > 0) {
             $random = str_pad(rand(0, 9999), 4, '0', STR_PAD_LEFT);
             $filing_number = $year . $random;
+            $stmt->bindValue(':filing_number', $filing_number, SQLITE3_TEXT);
+            $check = $stmt->execute()->fetchArray(SQLITE3_NUM)[0];
         }
-        
+
+        // 插入备案记录
         $stmt = $db->prepare("INSERT INTO filings (filing_number, website_name, website_url, description, contact_email, submission_date, status) 
                               VALUES (:filing_number, :website_name, :website_url, :description, :contact_email, :submission_date, 'pending')");
         $stmt->bindValue(':filing_number', $filing_number, SQLITE3_TEXT);
@@ -41,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->bindValue(':contact_email', $contact_email, SQLITE3_TEXT);
         $stmt->bindValue(':submission_date', date('Y-m-d H:i:s'), SQLITE3_TEXT);
         $result = $stmt->execute();
-        
+
         if ($result) {
             $display_number = "联bBb盟 icp备" . $filing_number;
             $code = "<a href='$site_url/query.php?keyword=$filing_number' target='_blank'>$display_number</a>";
@@ -55,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 } else {
-    header("Location: join.php");
+    header("Location: index.php");
     exit;
 }
 ?>
@@ -65,7 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
-    <title>备案申请成功 - <?php echo htmlspecialchars($settings['site_title'] ?? ''); ?></title>
+    <title>备案申请结果 - <?php echo htmlspecialchars($settings['site_title'] ?? ''); ?></title>
     <link rel="icon" href="https://www.dmoe.cc/favicon.ico" type="image/x-icon">
     <link rel="stylesheet" href="style.css">
 </head>
@@ -73,9 +75,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="github-corner">
         <a href="https://github.com/bbb-lsy07/dBd-Filing" target="_blank" class="github-link">开源地址</a>
     </div>
-    <div class="container">
+    <div class="container page-transition">
         <div class="header">
-            <h1 class="holographic-text">备案申请成功</h1>
+            <h1 class="holographic-text">备案申请结果</h1>
             <?php if (isset($error_message)): ?>
                 <p class="error"><?php echo $error_message; ?></p>
                 <button class="search-button glow-button" onclick="history.back()">
@@ -94,8 +96,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <p>审核将在 <strong>2~4个休息日</strong> 内完成，请耐心等待。</p>
                 <p>如有疑问，请联系：<?php echo htmlspecialchars($settings['contact_email'] ?? ''); ?> 或加入QQ群：<a href="https://qm.qq.com/q/<?php echo htmlspecialchars($settings['qq_group'] ?? ''); ?>" target="_blank"><?php echo htmlspecialchars($settings['qq_group'] ?? ''); ?></a></p>
                 <?php if (isset($mail_error)) echo "<p class='error'>$mail_error</p>"; ?>
-                <button class="search-button glow-button" onclick="location.href='join.php'">
-                    <span>返回申请页面</span>
+                <button class="search-button glow-button" onclick="location.href='index.php'">
+                    <span>返回主页</span>
                     <div class="glow"></div>
                 </button>
             <?php endif; ?>
@@ -109,7 +111,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <a href="public.php">公示</a>
         <a href="travel.php">迁跃</a>
         <br>
-        <a href="<?php echo htmlspecialchars($settings['site_url'] ?? ''); ?>/query.php?keyword=20240001" target="_blank">联bBb盟 icp备20240001号(This is a virtual filing system for entertainment and community interaction, not an official filing.)</a>
+        <a href="<?php echo htmlspecialchars($settings['site_url'] ?? ''); ?>/query.php?keyword=20240001" target="_blank">联bBb盟 icp备20240001号</a>
     </div>
     <script>
         function copyToClipboard() {

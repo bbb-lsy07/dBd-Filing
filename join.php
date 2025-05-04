@@ -1,7 +1,13 @@
 <?php
+session_start();
 require_once 'common.php';
 $db = init_database();
 $settings = $db->querySingle("SELECT * FROM settings", true);
+
+if (!isset($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+$csrf_token = $_SESSION['csrf_token'];
 ?>
 
 <!DOCTYPE html>
@@ -36,6 +42,7 @@ $settings = $db->querySingle("SELECT * FROM settings", true);
         </div>
         <div class="search-box">
             <form action="process.php" method="POST" class="neon-form">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
                 <input type="text" name="icp_number" class="search-input" placeholder="请输入您想要的8位备案号" required>
                 <input type="text" name="website_name" class="search-input" placeholder="请输入网站名称" required>
                 <input type="url" name="website_url" class="search-input" placeholder="请输入网站地址" required>
@@ -79,6 +86,6 @@ $settings = $db->querySingle("SELECT * FROM settings", true);
             });
         });
     </script>
-    <?php echo getFooterText();?>
+    <?php echo getFooterText(); ?>
 </body>
 </html>

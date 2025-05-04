@@ -1,42 +1,42 @@
 <?php
+session_start();
 require_once 'common.php';
 $db = init_database();
 $settings = $db->querySingle("SELECT * FROM settings", true);
 require_once 'send_mail.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $id = htmlspecialchars($_POST['id']);
-    $website_name = htmlspecialchars($_POST['website_name']);
-    $website_url = htmlspecialchars($_POST['website_url']);
-    $description = htmlspecialchars($_POST['description']);
-    $contact_email = htmlspecialchars($_POST['contact_email']);
-
-    $stmt = $db->prepare("UPDATE filings SET website_name = :website_name, website_url = :website_url, description = :description, contact_email = :contact_email, status = 'pending' WHERE id = :id");
-    $stmt->bindValue(':website_name', $website_name, SQLITE3_TEXT);
-    $stmt->bindValue(':website_url', $website_url, SQLITE3_TEXT);
-    $stmt->bindValue(':description', $description, SQLITE3_TEXT);
-    $stmt->bindValue(':contact_email', $contact_email, SQLITE3_TEXT);
-    $stmt->bindValue(':id', $id, SQLITE3_INTEGER);
-    $result = $stmt->execute();
-
     // 验证 CSRF token
-if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
-    $error_message = 'CSRF 验证失败，请重试！';
-} else {
-    if ($result) {
-        $stmt = $db->prepare("SELECT filing_number FROM filings WHERE id = :id");
-        $stmt->bindValue(':id', (int)$id, SQLITE3_INTEGER);
-        $filing = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
-        $success_message = "变更申请已提交，将重新审核！";
-        $subject = "变更申请已提交 - " . ($settings['site_title'] ?? '');
-        $body = "<h2>变更申请确认</h2><p>您的网站 <strong>" . $website_name . "</strong> 的变更申请已提交。</p><p>备案号：联bBb盟 icp备" . htmlspecialchars($filing['filing_number']) . "</p><p>状态：待审核</p><p>审核将在 2~4 个休息日内完成，请耐心等待。</p>";
-        if (!sendMail($contact_email, $subject, $body)) {
-            $mail_error = "邮件发送失败，请联系管理员";
-        }
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        $error_message = 'CSRF 验证失败，请重试！';
     } else {
-        $error_message = "变更申请提交失败，请稍后重试！";
-    }
-}
+        $id = htmlspecialchars($_POST['id']);
+        $website_name = htmlspecialchars($_POST['website_name']);
+        $website_url = htmlspecialchars($_POST['website_url']);
+        $description = htmlspecialchars($_POST['description']);
+        $contact_email = htmlspecialchars($_POST['contact_email']);
+
+        $stmt = $db->prepare("UPDATE filings SET website_name = :website_name, website_url = :website_url, description = :description, contact_email = :contact_email, status = 'pending' WHERE id = :id");
+        $stmt->bindValue(':website_name', $website_name, SQLITE3_TEXT);
+        $stmt->bindValue(':website_url', $website_url, SQLITE3_TEXT);
+        $stmt->bindValue(':description', $description, SQLITE3_TEXT);
+        $stmt->bindValue(':contact_email', $contact_email, SQLITE3_TEXT);
+        $stmt->bindValue(':id', $id, SQLITE3_INTEGER);
+        $result = $stmt->execute();
+
+        if ($result) {
+            $stmt = $db->prepare("SELECT filing_number FROM filings WHERE id = :id");
+            $stmt->bindValue(':id', (int)$id, SQLITE3_INTEGER);
+            $filing = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+            $success_message = "变更申请已提交，将重新审核！";
+            $subject = "变更申请已提交 - " . ($settings['site_title'] ?? '');
+            $body = "<h2>变更申请确认</h2><p>您的网站 <strong>" . $website_name . "</strong> 的变更申请已提交。</p><p>备案号：联bBb盟 icp备" . htmlspecialchars($filing['filing_number']) . "</p><p>状态：待审核</p><p>审核将在 2~4 个休息日内完成，请耐心等待。</p>";
+            if (!sendMail($contact_email, $subject, $body)) {
+                $mail_error = "邮件发送失败，请联系管理员";
+            }
+        } else {
+            $error_message = "变更申请提交失败，请稍后重试！";
+        }
     }
 } else {
     header("Location: change.php");
@@ -102,5 +102,6 @@ if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_tok
             });
         });
     </script>
+    <?php echo getFooterText(); ?>
 </body>
 </html>
