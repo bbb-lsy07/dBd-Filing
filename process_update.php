@@ -2,11 +2,48 @@
 session_start();
 require_once 'common.php';
 
+if (isset($_GET['action']) && $_GET['action'] == 'update' && isset($_GET['version'])) {
+    $version = $_GET['version'];
+    $json_url = 'https://admin-hosting-v.bbb-lsy07.my/json/1.json';
+    $json_data = file_get_contents($json_url);
+    if ($json_data) {
+        $update_info = json_decode($json_data, true);
+        if ($update_info && isset($update_info['versions'][0])) {
+            $latest_version = $update_info['versions'][0]['version'];
+            if ($latest_version == $version) {
+                $zip_url = $update_info['versions'][0]['file_path'];
+                $zip_file = 'update.zip';
+                file_put_contents($zip_file, file_get_contents($zip_url));
+                $zip = new ZipArchive;
+                if ($zip->open($zip_file) === TRUE) {
+                    $zip->extractTo('.');
+                    $zip->close();
+                    unlink($zip_file);
+                    $db = init_database();
+                    $stmt = $db->prepare("UPDATE settings SET version = :version WHERE id = 1");
+                    $stmt->bindValue(':version', $version, SQLITE3_TEXT);
+                    $stmt->execute();
+                    header("Location: admin.php?update_success=1");
+                } else {
+                    header("Location: admin.php?update_error=1");
+                }
+            } else {
+                header("Location: admin.php?update_error=2");
+            }
+        } else {
+            header("Location: admin.php?update_error=3");
+        }
+    } else {
+        header("Location: admin.php?update_error=4");
+    }
+    exit;
+}
+
+// 以下为原有的 GitHub 更新逻辑
 header('Content-Type: text/event-stream');
 header('Cache-Control: no-cache');
 header('Connection: keep-alive');
 
-// 日志函数
 function log_message($message) {
     file_put_contents('update_log.txt', date('Y-m-d H:i:s') . ' - ' . $message . PHP_EOL, FILE_APPEND);
 }
@@ -79,7 +116,6 @@ try {
     exit;
 }
 
-// 保持连接活跃
 echo ": keepalive\n\n";
 ob_flush();
 flush();

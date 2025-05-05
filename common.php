@@ -16,7 +16,8 @@ function init_database() {
         smtp_username TEXT,
         smtp_password TEXT,
         smtp_secure TEXT DEFAULT 'tls',
-        background_image TEXT DEFAULT 'https://www.dmoe.cc/random.php'
+        background_image TEXT DEFAULT 'https://www.dmoe.cc/random.php',
+        version TEXT DEFAULT '2.5.0'
     )");
 
     $result = $db->query("PRAGMA table_info(settings)");
@@ -26,6 +27,9 @@ function init_database() {
     }
     if (!in_array('background_image', $columns)) {
         $db->exec("ALTER TABLE settings ADD COLUMN background_image TEXT DEFAULT 'https://www.dmoe.cc/random.php'");
+    }
+    if (!in_array('version', $columns)) {
+        $db->exec("ALTER TABLE settings ADD COLUMN version TEXT DEFAULT '1.0.0'");
     }
 
     $db->exec("CREATE TABLE IF NOT EXISTS filings (
@@ -56,8 +60,8 @@ function init_database() {
     )");
 
     if (!$db->querySingle("SELECT * FROM settings")) {
-        $db->exec("INSERT INTO settings (site_title, site_url, welcome_message, contact_email, qq_group, background_image) 
-                   VALUES ('联bBb盟 ICP 备案系统', 'https://icp.bbb-lsy07.my', '这是一个虚拟备案系统，仅供娱乐和社区互动使用，非官方备案。', 'admin@bbb-lsy07.my', '123456789', 'https://www.dmoe.cc/random.php')");
+        $db->exec("INSERT INTO settings (site_title, site_url, welcome_message, contact_email, qq_group, background_image, version) 
+                   VALUES ('联bBb盟 ICP 备案系统', 'https://icp.bbb-lsy07.my', '这是一个虚拟备案系统，仅供娱乐和社区互动使用，非官方备案。', 'admin@bbb-lsy07.my', '123456789', 'https://www.dmoe.cc/random.php', '2.5.0')");
     }
 
     if ($db->querySingle("SELECT COUNT(*) FROM admins") == 0) {
@@ -70,16 +74,16 @@ function init_database() {
     return $db;
 }
 
-define('APP_VERSION', '1.0.1');
+define('APP_VERSION', '2.5.0');
 
 function getFooterText() {
     $db = init_database();
-    $stmt = $db->prepare("SELECT site_title FROM settings LIMIT 1");
+    $stmt = $db->prepare("SELECT site_title, version FROM settings LIMIT 1");
     $result = $stmt->execute();
     $row = $result->fetchArray(SQLITE3_ASSOC);
-    $row = $row ?: ['site_title' => '联bBb盟 ICP 备案系统'];
+    $row = $row ?: ['site_title' => '联bBb盟 ICP 备案系统', 'version' => '1.0.0'];
     return "<footer>
-        <p>版权所有 © " . date('Y') . " " . htmlspecialchars($row['site_title']) . " | 版本 " . APP_VERSION . "</p>
+        <p>版权所有 © " . date('Y') . " " . htmlspecialchars($row['site_title']) . " | 版本 " . htmlspecialchars($row['version']) . "</p>
     </footer>";
 }
 ?>

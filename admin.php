@@ -16,7 +16,8 @@ $settings = $settings ?: [
     'welcome_message' => '这是一个虚拟备案系统，仅供娱乐和社区互动使用，非官方备案。',
     'contact_email' => 'admin@bbb-lsy07.my',
     'qq_group' => '123456789',
-    'background_image' => 'https://www.dmoe.cc/random.php'
+    'background_image' => 'https://www.dmoe.cc/random.php',
+    'version' => '1.0.0'
 ];
 require_once 'send_mail.php';
 
@@ -99,6 +100,91 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['site_title'])) {
     $settings = $db->querySingle("SELECT * FROM settings", true);
 }
 
+// 检查更新逻辑（仅在 action=check_update 或 AJAX 调用时执行）
+$versions = [];
+$update_error = null;
+if (isset($_GET['action']) && $_GET['action'] == 'check_update') {
+    ob_start(); // 开始输出缓冲，防止意外输出
+    $json_url = 'https://admin-hosting-v.bbb-lsy07.my/json/1.json';
+    $ch = curl_init($json_url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    $json_data = curl_exec($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curl_error = curl_error($ch);
+    curl_close($ch);
+
+    // 记录日志
+    $log_message = date('Y-m-d H:i:s') . " - 尝试访问 $json_url. HTTP 状态码: $http_code";
+    if ($curl_error) {
+        $log_message .= " | 错误: $curl_error";
+    }
+    if ($json_data && $http_code == 200) {
+        $log_message .= " | 响应前100字符: " . substr($json_data, 0, 100);
+    }
+    file_put_contents('update_errors.log', $log_message . PHP_EOL, FILE_APPEND);
+
+    if ($json_data && $http_code == 200) {
+        $update_info = json_decode($json_data, true);
+        if (is_array($update_info) && isset($update_info['versions']) && is_array($update_info['versions']) && !empty($update_info['versions'])) {
+            $versions = $update_info['versions'];
+            $current_version = APP_VERSION;
+            $latest_version = $versions[0]['version'];
+            $current_version_clean = preg_replace('/^v/', '', $current_version);
+            $latest_version_clean = preg_replace('/^v/', '', $latest_version);
+            $update_available = version_compare($latest_version_clean, $current_version_clean, '>');
+            file_put_contents('update_errors.log', date('Y-m-d H:i:s') . " - 当前版本: $current_version, 最新版本: $latest_version, 是否可更新: " . ($update_available ? '是' : '否') . PHP_EOL, FILE_APPEND);
+
+            // 如果是 AJAX 请求，返回 JSON
+            if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
+                ob_clean(); // 清理缓冲区，确保无意外输出
+                header('Content-Type: application/json');
+                echo json_encode([
+                    'success' => true,
+                    'versions' => $versions,
+                    'current_version' => $current_version,
+                    'latest_version' => $latest_version,
+                    'update_available' => $update_available
+                ]);
+                exit;
+            }
+        } else {
+            $update_error = "无法解析更新信息: JSON 格式无效或 versions 数组为空";
+            file_put_contents('update_errors.log', date('Y-m-d H:i:s') . " - JSON 解析错误: " . json_last_error_msg() . PHP_EOL, FILE_APPEND);
+            if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
+                ob_clean();
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'error' => $update_error]);
+                exit;
+            }
+        }
+    } else {
+        $update_error = "无法获取更新信息: HTTP 状态码 $http_code";
+        if ($curl_error) {
+            $update_error .= " (cURL 错误: $curl_error)";
+        }
+        if ($http_code == 403) {
+            $update_error .= "（可能是权限问题，请检查服务器配置或提供 API 密钥）";
+        }
+        file_put_contents('update_errors.log', date('Y-m-d H:i:s') . " - 获取失败: $update_error" . PHP_EOL, FILE_APPEND);
+        if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
+            ob_clean();
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'error' => $update_error]);
+            exit;
+        }
+    }
+    ob_end_clean(); // 清理缓冲区
+}
+
+if (isset($_GET['update_success'])) {
+    $update_success_message = "更新成功！";
+} elseif (isset($_GET['update_error'])) {
+    $update_error_message = "更新失败，错误代码：{$_GET['update_error']}";
+}
+
 $results = $db->query("SELECT * FROM filings ORDER BY submission_date DESC");
 ?>
 
@@ -114,9 +200,9 @@ $results = $db->query("SELECT * FROM filings ORDER BY submission_date DESC");
     <link rel="stylesheet" href="style.css">
     <style>
         .modal-content {
-            max-width: 800px; /* 与.neon-form的max-width一致 */
-            max-height: 80vh; /* 最大高度限制 */
-            overflow-y: auto; /* 内容超出时可滚动 */
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
             position: absolute;
             top: 50%;
             left: 50%;
@@ -130,7 +216,7 @@ $results = $db->query("SELECT * FROM filings ORDER BY submission_date DESC");
         }
         .neon-form {
             display: grid;
-            grid-template-columns: 1fr 1fr; /* 左右布局 */
+            grid-template-columns: 1fr 1fr;
             gap: 20px;
         }
         .basic-settings, .smtp-settings {
@@ -146,19 +232,55 @@ $results = $db->query("SELECT * FROM filings ORDER BY submission_date DESC");
             text-shadow: 0 0 5px #0ff;
         }
         .neon-form button {
-            grid-column: span 2; /* 按钮跨两列 */
+            grid-column: span 2;
             margin-top: 10px;
+        }
+        .version-list {
+            list-style: none;
+            padding: 0;
+            margin: 10px 0;
+        }
+        .version-item {
+            border-bottom: 1px solid #0ff;
+            padding: 10px 0;
+        }
+        .version-item:last-child {
+            border-bottom: none;
+        }
+        .version-item p {
+            margin: 5px 0;
+        }
+        .current-version {
+            color: #ffd700;
+            font-weight: bold;
+        }
+        .update-link {
+            color: #2ecc71;
+            text-decoration: none;
+            display: inline-block;
+            margin-top: 10px;
+        }
+        .update-link:hover {
+            text-decoration: underline;
+        }
+        .check-update-link {
+            color: #ffd700;
+            text-decoration: none;
+            margin-left: 10px;
+        }
+        .check-update-link:hover {
+            text-decoration: underline;
         }
         @media (max-width: 600px) {
             .modal-content {
-                max-width: 90%; /* 移动端宽度自适应 */
+                max-width: 90%;
                 margin: 0 10px;
             }
             .neon-form {
-                grid-template-columns: 1fr; /* 移动端垂直布局 */
+                grid-template-columns: 1fr;
             }
             .neon-form button {
-                grid-column: span 1; /* 按钮适应单列 */
+                grid-column: span 1;
             }
         }
     </style>
@@ -173,13 +295,16 @@ $results = $db->query("SELECT * FROM filings ORDER BY submission_date DESC");
             <p>欢迎，管理员！ 
                 <a href="#" class="modify-link" onclick="document.getElementById('modifyModal').style.display='flex'">修改账户</a>
                 <a href="#" class="modify-link" onclick="document.getElementById('settingsModal').style.display='flex'">站点设置</a>
-                <a href="#" class="modify-link" onclick="document.getElementById('githubModal').style.display='flex'">更新系统</a>
+                <a href="#" class="modify-link" onclick="document.getElementById('githubModal').style.display='flex'">初始版本</a>
                 <a href="logout.php" class="logout-link">退出登录</a>
+                <a href="#" class="check-update-link" onclick="showCheckUpdateModal()">检查更新</a>
             </p>
             <?php if (isset($settings_update_message)) echo "<p class='success'>$settings_update_message</p>"; ?>
             <?php if (isset($mail_error)) echo "<p class='error'>$mail_error</p>"; ?>
             <?php if (isset($update_message)) echo "<p class='success'>$update_message</p>"; ?>
             <?php if (isset($update_error)) echo "<p class='error'>$update_error</p>"; ?>
+            <?php if (isset($update_success_message)) echo "<p class='success'>$update_success_message</p>"; ?>
+            <?php if (isset($update_error_message)) echo "<p class='error'>$update_error_message</p>"; ?>
         </div>
         <div class="table-wrapper card-effect">
             <table>
@@ -206,17 +331,17 @@ $results = $db->query("SELECT * FROM filings ORDER BY submission_date DESC");
                             <td data-label="描述"><?php echo htmlspecialchars($row['description']); ?></td>
                             <td data-label="邮箱"><?php echo htmlspecialchars($row['contact_email']); ?></td>
                             <td data-label="提交时间"><?php echo htmlspecialchars($row['submission_date']); ?></td>
-                            <td data-label="状态"><?php echo $row['status'] == 'pending' ? '待审核' : ($row['status'] == 'approved' ? '已通过' : '已拒绝'); ?></td>
-                            <td data-label="操作">
-                                <?php if ($row['status'] == 'pending'): ?>
-                                    <a href="admin.php?approve=<?php echo $row['id']; ?>" class="approve-link">通过</a> |
-                                    <a href="admin.php?reject=<?php echo $row['id']; ?>" class="reject-link">拒绝</a> |
-                                <?php endif; ?>
-                                <a href="admin.php?delete=<?php echo $row['id']; ?>" class="delete-link" onclick="return confirm('确定删除吗？');">删除</a>
-                            </td>
-                        </tr>
-                    <?php endwhile; ?>
-                </tbody>
+            <td data-label="状态"><?php echo $row['status'] == 'pending' ? '待审核' : ($row['status'] == 'approved' ? '已通过' : '已拒绝'); ?></td>
+            <td data-label="操作">
+                <?php if ($row['status'] == 'pending'): ?>
+                    <a href="admin.php?approve=<?php echo $row['id']; ?>" class="approve-link">通过</a> |
+                    <a href="admin.php?reject=<?php echo $row['id']; ?>" class="reject-link">拒绝</a> |
+                <?php endif; ?>
+                <a href="admin.php?delete=<?php echo $row['id']; ?>" class="delete-link" onclick="return confirm('确定删除吗？');">删除</a>
+            </td>
+        </tr>
+    <?php endwhile; ?>
+</tbody>
             </table>
         </div>
     </div>
@@ -278,11 +403,11 @@ $results = $db->query("SELECT * FROM filings ORDER BY submission_date DESC");
     <div id="githubModal" class="modal" style="display: none;">
         <div class="modal-content card-effect">
             <span class="close" onclick="document.getElementById('githubModal').style.display='none'">×</span>
-            <h2>系统更新</h2>
+            <h2>初始版本</h2>
             <form id="update-form" class="neon-form">
                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
                 <button type="submit" class="search-button glow-button" id="update-button">
-                    <span>从GitHub更新</span>
+                    <span>从GitHub获取</span>
                     <div class="glow"></div>
                 </button>
             </form>
@@ -290,13 +415,75 @@ $results = $db->query("SELECT * FROM filings ORDER BY submission_date DESC");
             <div id="update-status" class="result"></div>
         </div>
     </div>
+    <div id="checkUpdateModal" class="modal" style="display: none;">
+        <div class="modal-content card-effect">
+            <span class="close" onclick="document.getElementById('checkUpdateModal').style.display='none'">×</span>
+            <h2>检查更新</h2>
+            <div id="version-list" class="version-list">
+                <p>正在加载版本信息...</p>
+            </div>
+        </div>
+    </div>
     <script>
+        function showCheckUpdateModal() {
+            const modal = document.getElementById('checkUpdateModal');
+            const versionList = document.getElementById('version-list');
+            modal.style.display = 'flex';
+            versionList.innerHTML = '<p>正在加载版本信息...</p>';
+
+            fetch('admin.php?action=check_update', {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP 错误，状态码: ${response.status}`);
+                }
+                return response.text(); // 先获取原始文本
+            })
+            .then(text => {
+                // 记录响应内容到控制台，便于调试
+                console.log('AJAX 响应内容:', text);
+                try {
+                    const data = JSON.parse(text);
+                    if (data.success) {
+                        let html = `<p>当前版本：${data.current_version} ${data.current_version === data.latest_version ? '<span class="current-version">(最新版本)</span>' : ''}</p>`;
+                        html += '<ul class="version-list">';
+                        data.versions.forEach(version => {
+                            html += `
+                                <li class="version-item">
+                                    <p><strong>版本：${version.version}</strong> ${version.version === data.current_version ? '<span class="current-version">(当前)</span>' : ''}</p>
+                                    <p>更新日志：${version.changelog || '无描述'}</p>
+                                    <p>PHP版本要求：${version.php_version || '未知'}</p>
+                                    <p>更新类型：${version.update_type || '未知'}</p>
+                                    <p>创建时间：${version.created_at || '未知'}</p>
+                                    ${version.version !== data.current_version ? `<a href="process_update.php?action=update&version=${encodeURIComponent(version.version)}" class="update-link search-button glow-button"><span>安装此版本</span><div class="glow"></div></a>` : ''}
+                                </li>
+                            `;
+                        });
+                        html += '</ul>';
+                        versionList.innerHTML = html;
+                    } else {
+                        versionList.innerHTML = `<p class="error">加载版本信息失败：${data.error}</p>`;
+                    }
+                } catch (error) {
+                    // 记录解析错误的响应内容
+                    console.error('JSON 解析错误:', error, '响应内容:', text);
+                    versionList.innerHTML = `<p class="error">加载版本信息失败：${error.message} (响应内容: ${text.substring(0, 100)}...)</p>`;
+                }
+            })
+            .catch(error => {
+                console.error('AJAX 请求失败:', error);
+                versionList.innerHTML = `<p class="error">加载版本信息失败：${error.message}</p>`;
+            });
+        }
+
         window.onclick = function(event) {
-            ['modifyModal', 'settingsModal', 'githubModal'].forEach(id => {
+            ['modifyModal', 'settingsModal', 'githubModal', 'checkUpdateModal'].forEach(id => {
                 let modal = document.getElementById(id);
                 if (event.target == modal) modal.style.display = "none";
             });
         };
+
         document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
                 document.body.classList.add('loaded');
