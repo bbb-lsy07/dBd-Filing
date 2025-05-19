@@ -4,6 +4,8 @@
 ![image](https://img.shields.io/github/stars/bbb-lsy07/dBd-Filing?style=flat-square)
 ![image](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)
 
+🌐 **Language Switch**: [English README](https://github.com/bbb-lsy07/dBd-Filing/blob/main/README_EN.md)
+
 > **重要提示**：本系统仅用于技术学习与娱乐，不具备任何官方备案效力，禁止用于非法场景或存储真实敏感信息！
 
 ## 📌 项目简介
@@ -32,7 +34,8 @@ dBd-Filing/
 ├── vendor/                  # 依赖库  
 │   └── PHPMailer/src/       # PHPMailer 邮件组件（官方库）  
 ├── LICENSE                  # MIT 开源协议  
-├── README.md                # 项目说明  
+├── README.md                # 项目说明（中文）  
+├── README_EN.md             # 项目说明（英文）  
 ├── about.php                # 关于页面  
 ├── admin.php                # 后台管理主界面  
 ├── change.php               # 备案变更页面  
