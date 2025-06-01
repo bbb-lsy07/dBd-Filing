@@ -1,0 +1,15 @@
+
+/* Dark mode overrides */
+body.dark-mode {
+    background-color: #121212;
+    color: #e0e0e0;
+}
+a { color: #90caf9; }
+input, textarea, select {
+    background-color: #1e1e1e;
+    color: #e0e0e0;
+    border-color: #333;
+}
+.card, .panel, .modal-content {
+    background-color: #1e1e1e;
+}
