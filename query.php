@@ -214,6 +214,10 @@ if (isset($_GET['keyword'])) {
                                     <dd><?php echo htmlspecialchars($row['submission_date']); ?></dd>
                                 </div>
                                 <div>
+                                    <dt>备案证书</dt>
+                                    <dd><a href="generate_certificate.php?filing_id=<?php echo $row['id']; ?>" target="_blank">下载备案证书</a></dd>
+                                </div>
+                                <div>
                                     <dt>状态</dt>
                                     <dd>已通过</dd>
                                 </div>

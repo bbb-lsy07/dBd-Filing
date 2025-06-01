@@ -1,40 +1,54 @@
 <?php
 session_start();
 require_once 'common.php';
+require_once 'config.php';
 
 if (isset($_GET['action']) && $_GET['action'] == 'update' && isset($_GET['version'])) {
     $version = $_GET['version'];
-    $json_url = 'https://admin-hosting-v.bbb-lsy07.my/json/1.json';
-    $json_data = file_get_contents($json_url);
-    if ($json_data) {
+    $json_url = UPDATE_JSON_URL;
+    try {
+        $json_data = @file_get_contents($json_url);
+        if ($json_data === false) {
+            throw new Exception("无法获取更新信息。");
+        }
         $update_info = json_decode($json_data, true);
-        if ($update_info && isset($update_info['versions'][0])) {
-            $latest_version = $update_info['versions'][0]['version'];
-            if ($latest_version == $version) {
-                $zip_url = $update_info['versions'][0]['file_path'];
-                $zip_file = 'update.zip';
-                file_put_contents($zip_file, file_get_contents($zip_url));
-                $zip = new ZipArchive;
-                if ($zip->open($zip_file) === TRUE) {
-                    $zip->extractTo('.');
-                    $zip->close();
-                    unlink($zip_file);
-                    $db = init_database();
-                    $stmt = $db->prepare("UPDATE settings SET version = :version WHERE id = 1");
-                    $stmt->bindValue(':version', $version, SQLITE3_TEXT);
-                    $stmt->execute();
-                    header("Location: admin.php?update_success=1");
-                } else {
-                    header("Location: admin.php?update_error=1");
+        if (!$update_info || !isset($update_info['versions'][0])) {
+            throw new Exception("更新信息格式不正确。");
+        }
+        $latest_version = $update_info['versions'][0]['version'];
+        if ($latest_version == $version) {
+            $zip_url = $update_info['versions'][0]['file_path'];
+            $zip_file = 'update.zip';
+            $zip_content = @file_get_contents($zip_url);
+            if ($zip_content === false) {
+                throw new Exception("无法下载更新包。");
+            }
+            if (@file_put_contents($zip_file, $zip_content) === false) {
+                throw new Exception("无法保存更新包。");
+            }
+            $zip = new ZipArchive;
+            if ($zip->open($zip_file) === TRUE) {
+                if ($zip->extractTo('.') === false) {
+                    throw new Exception("无法解压更新包。");
                 }
+                $zip->close();
+                if (@unlink($zip_file) === false) {
+                    error_log("无法删除临时更新文件: " . $zip_file);
+                }
+                $db = init_database();
+                $stmt = $db->prepare("UPDATE settings SET version = :version WHERE id = 1");
+                $stmt->bindValue(':version', $version, SQLITE3_TEXT);
+                $stmt->execute();
+                header("Location: admin.php?update_success=1");
             } else {
-                header("Location: admin.php?update_error=2");
+                throw new Exception("无法打开更新包。");
             }
         } else {
-            header("Location: admin.php?update_error=3");
+            header("Location: admin.php?update_error=2"); // 版本不匹配
         }
-    } else {
-        header("Location: admin.php?update_error=4");
+    } catch (Exception $e) {
+        error_log("更新失败: " . $e->getMessage());
+        header("Location: admin.php?update_error=1&msg=" . urlencode($e->getMessage()));
     }
     exit;
 }

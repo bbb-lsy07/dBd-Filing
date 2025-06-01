@@ -14,6 +14,8 @@
     margin: 0;
     padding: 0;
     font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 body {
@@ -26,6 +28,7 @@ body {
     background: #333 url('https://www.dmoe.cc/random.php') no-repeat center center fixed;
     background-size: cover;
     position: relative;
+    transition: opacity 0.5s ease-in-out;
 }
 
 body::before {
@@ -35,7 +38,7 @@ body::before {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.2); /* Reduced opacity for better visibility */
+    background: rgba(0, 0, 0, 0.2);
     z-index: -1;
 }
 
@@ -68,13 +71,18 @@ body, p, a, td, th, span, pre, input, textarea, button {
     min-height: 80vh;
     position: relative;
     z-index: 1;
-    transition: transform 0.3s ease;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.container:hover, .travel-container:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
 }
 
 /* Fallback for browsers that don't support backdrop-filter */
 @supports not (backdrop-filter: blur(8px)) {
     .container, .travel-container, .card-effect, .neon-form, pre, .table-wrapper, .modal-content {
-        background: rgba(255, 255, 255, 0.2); /* Slightly more opaque fallback */
+        background: rgba(255, 255, 255, 0.2);
     }
 }
 
@@ -83,6 +91,12 @@ body, p, a, td, th, span, pre, input, textarea, button {
     backdrop-filter: blur(8px);
     border: 1px solid var(--glass-border);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    border-radius: 12px;
+    transition: transform 0.3s ease;
+}
+
+.card-effect:hover {
+    transform: scale(1.01);
 }
 
 .header {
@@ -117,6 +131,7 @@ h2 {
     display: inline-block;
     font-size: 32px;
     font-weight: 700;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.4);
 }
 
 @keyframes hologram {
@@ -163,6 +178,11 @@ h2 {
     gap: 10px;
     width: 100%;
     max-width: 800px;
+    transition: box-shadow 0.3s ease;
+}
+
+.neon-form:hover {
+    box-shadow: 0 0 15px var(--neon-color);
 }
 
 @keyframes neonPulse {
@@ -177,7 +197,7 @@ h2 {
     border: 2px solid #666;
     border-radius: 10px;
     font-size: 16px;
-    transition: border-color 0.3s;
+    transition: border-color 0.3s, box-shadow 0.3s;
     background: var(--glass-bg);
     backdrop-filter: blur(8px);
     color: #FFFFFF;
@@ -186,6 +206,7 @@ h2 {
 .search-input:focus {
     outline: none;
     border-color: #999;
+    box-shadow: 0 0 8px rgba(0, 255, 255, 0.3);
 }
 
 .search-input[type="text"], .search-input[type="url"], .search-input[type="email"], .search-input[type="password"], .search-input[type="number"], select.search-input {
@@ -212,11 +233,12 @@ textarea.search-input {
     overflow: hidden;
     display: block;
     margin: 10px auto;
+    transition: background 0.3s, transform 0.3s, box-shadow 0.3s;
 }
 
 .glow-button {
     background: var(--primary-color);
-    transition: transform 0.3s;
+    transition: transform 0.3s, box-shadow 0.3s;
 }
 
 .glow-button span {
@@ -231,7 +253,7 @@ textarea.search-input {
     width: 100%;
     height: 100%;
     background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
-    transition: 0.5s;
+    transition: left 0.5s ease;
 }
 
 .glow-button:hover .glow {
@@ -246,6 +268,8 @@ textarea.search-input {
 
 .search-button:hover, .copy-btn:hover, .join-btn:hover {
     background: var(--secondary-color);
+    transform: translateY(-2px);
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
 }
 
 .result {
@@ -255,6 +279,11 @@ textarea.search-input {
     border-left: 4px solid var(--accent-color);
     background: var(--glass-bg);
     backdrop-filter: blur(8px);
+    transition: transform 0.3s ease;
+}
+
+.result:hover {
+    transform: translateY(-2px);
 }
 
 .error {
@@ -329,6 +358,8 @@ td[data-label="描述"] {
 
 tr:hover {
     background: rgba(255, 255, 255, 0.1);
+    transform: scale(1.005);
+    transition: background 0.3s, transform 0.3s;
 }
 
 @media (max-width: 768px) {
@@ -369,15 +400,18 @@ tr:hover {
     width: 100%;
     background: var(--glass-bg);
     backdrop-filter: blur(8px);
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .footer a {
     text-decoration: none;
     margin: 0 10px;
+    transition: color 0.3s;
 }
 
 .footer a:hover {
     text-decoration: underline;
+    color: var(--accent-color);
 }
 
 .github-corner {
@@ -390,6 +424,11 @@ tr:hover {
     backdrop-filter: blur(8px);
     clip-path: polygon(100% 0, 0 0, 100% 100%);
     z-index: 1000;
+    transition: transform 0.3s;
+}
+
+.github-corner:hover {
+    transform: scale(1.05);
 }
 
 .github-link {
@@ -400,10 +439,12 @@ tr:hover {
     font-size: 12px;
     transform: rotate(45deg);
     white-space: nowrap;
+    color: #FFFFFF;
 }
 
 .github-link:hover {
     text-decoration: underline;
+    color: var(--accent-color);
 }
 
 .modal {
@@ -430,13 +471,21 @@ tr:hover {
     position: absolute;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -50%);
+    transform: translate(-50%, -50%) !important;
+}
+
+/* Ensure no hover effects interfere with modal-content positioning */
+.modal-content:hover {
+    transform: translate(-50%, -50%) !important;
+    top: 50% !important;
+    left: 50% !important;
 }
 
 .close {
     float: right;
     font-size: 24px;
     cursor: pointer;
+    transition: color 0.3s;
 }
 
 .close:hover {
@@ -447,56 +496,68 @@ tr:hover {
     color: #2ecc71;
     text-decoration: none;
     margin-right: 10px;
+    transition: color 0.3s;
 }
 
 .approve-link:hover {
     text-decoration: underline;
+    color: var(--neon-color);
 }
 
 .reject-link {
     color: #e74c3c;
     text-decoration: none;
     margin-right: 10px;
+    transition: color 0.3s;
 }
 
 .reject-link:hover {
     text-decoration: underline;
+    color: var(--neon-color);
 }
 
 .delete-link {
     color: #e74c3c;
     text-decoration: none;
+    transition: color 0.3s;
 }
 
 .delete-link:hover {
     text-decoration: underline;
+    color: var(--neon-color);
 }
 
 .logout-link {
     color: #e74c3c;
     text-decoration: none;
     margin-left: 10px;
+    transition: color 0.3s;
 }
 
 .logout-link:hover {
     text-decoration: underline;
+    color: var(--neon-color);
 }
 
 .modify-link {
     text-decoration: none;
     margin-right: 10px;
+    transition: color 0.3s;
 }
 
 .modify-link:hover {
     text-decoration: underline;
+    color: var(--neon-color);
 }
 
 .filing-link {
     text-decoration: none;
+    transition: color 0.3s;
 }
 
 .filing-link:hover {
     text-decoration: underline;
+    color: var(--neon-color);
 }
 
 .travel-info {
@@ -505,6 +566,11 @@ tr:hover {
     border-radius: 10px;
     background: var(--glass-bg);
     backdrop-filter: blur(8px);
+    transition: transform 0.3s ease;
+}
+
+.travel-info:hover {
+    transform: translateY(-2px);
 }
 
 .travel-info p {

@@ -5,30 +5,47 @@ $db = init_database();
 $settings = $db->querySingle("SELECT * FROM settings", true);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['reset_password'])) {
-    $stmt = $db->prepare("SELECT * FROM admins WHERE username = :username");
-    $stmt->bindValue(':username', $_POST['username'], SQLITE3_TEXT);
-    $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
-    if ($row && password_verify($_POST['password'], $row['password'])) {
-        $_SESSION['loggedin'] = true;
-        $_SESSION['admin_id'] = $row['id'];
-        $_SESSION['user_role'] = $row['role'] ?? 'admin';
-        if ($row['force_reset'] == 1) $_SESSION['force_reset'] = true;
-        else header("Location: admin.php");
-        exit;
-    } else {
-        $error = "用户名或密码错误！";
+    try {
+        $stmt = $db->prepare("SELECT * FROM admins WHERE username = :username");
+        $stmt->bindValue(':username', $_POST['username'], SQLITE3_TEXT);
+        $result = $stmt->execute();
+        if ($result === false) {
+            throw new Exception($db->lastErrorMsg());
+        }
+        $row = $result->fetchArray(SQLITE3_ASSOC);
+        if ($row && password_verify($_POST['password'], $row['password'])) {
+            $_SESSION['loggedin'] = true;
+            $_SESSION['admin_id'] = $row['id'];
+            $_SESSION['user_role'] = $row['role'] ?? 'admin';
+            if ($row['force_reset'] == 1) $_SESSION['force_reset'] = true;
+            else header("Location: admin.php");
+            exit;
+        } else {
+            $error = "用户名或密码错误！";
+        }
+    } catch (Exception $e) {
+        error_log("登录失败: " . $e->getMessage());
+        $error = "登录失败，请稍后再试！";
     }
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reset_password'])) {
     if ($_POST['new_password'] === $_POST['confirm_password']) {
-        $stmt = $db->prepare("UPDATE admins SET password = :password, force_reset = 0 WHERE id = :id");
-        $stmt->bindValue(':password', password_hash($_POST['new_password'], PASSWORD_DEFAULT), SQLITE3_TEXT);
-        $stmt->bindValue(':id', $_SESSION['admin_id'], SQLITE3_INTEGER);
-        $stmt->execute();
-        unset($_SESSION['force_reset']);
-        header("Location: admin.php");
-        exit;
+        try {
+            $stmt = $db->prepare("UPDATE admins SET password = :password, force_reset = 0 WHERE id = :id");
+            $stmt->bindValue(':password', password_hash($_POST['new_password'], PASSWORD_DEFAULT), SQLITE3_TEXT);
+            $stmt->bindValue(':id', $_SESSION['admin_id'], SQLITE3_INTEGER);
+            $result = $stmt->execute();
+            if ($result === false) {
+                throw new Exception($db->lastErrorMsg());
+            }
+            unset($_SESSION['force_reset']);
+            header("Location: admin.php");
+            exit;
+        } catch (Exception $e) {
+            error_log("重置密码失败: " . $e->getMessage());
+            $reset_error = "重置密码失败，请稍后再试！";
+        }
     } else {
         $reset_error = "两次输入的密码不一致！";
     }

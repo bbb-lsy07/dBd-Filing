@@ -22,20 +22,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->bindValue(':description', $description, SQLITE3_TEXT);
         $stmt->bindValue(':contact_email', $contact_email, SQLITE3_TEXT);
         $stmt->bindValue(':id', $id, SQLITE3_INTEGER);
-        $result = $stmt->execute();
+        try {
+            $result = $stmt->execute();
+            if (!$result) {
+                throw new Exception("Database update failed.");
+            }
+        } catch (Exception $e) {
+            error_log("Change submission failed: " . $e->getMessage());
+            $error_message = "变更申请提交失败，请稍后重试！";
+        }
 
-        if ($result) {
+        if (!isset($error_message)) {
             $stmt = $db->prepare("SELECT filing_number FROM filings WHERE id = :id");
             $stmt->bindValue(':id', (int)$id, SQLITE3_INTEGER);
             $filing = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
             $success_message = "变更申请已提交，将重新审核！";
             $subject = "变更申请已提交 - " . ($settings['site_title'] ?? '');
             $body = "<h2>变更申请确认</h2><p>您的网站 <strong>" . $website_name . "</strong> 的变更申请已提交。</p><p>备案号：联bBb盟 icp备" . htmlspecialchars($filing['filing_number']) . "</p><p>状态：待审核</p><p>审核将在 2~4 个休息日内完成，请耐心等待。</p>";
-            if (!sendMail($contact_email, $subject, $body)) {
+            try {
+                if (!sendMail($contact_email, $subject, $body)) {
+                    throw new Exception("Mail sending failed.");
+                }
+            } catch (Exception $e) {
+                error_log("Mail sending failed: " . $e->getMessage());
                 $mail_error = "邮件发送失败，请联系管理员";
             }
-        } else {
-            $error_message = "变更申请提交失败，请稍后重试！";
         }
     }
 } else {

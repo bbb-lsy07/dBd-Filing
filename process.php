@@ -40,18 +40,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->bindValue(':description', $description, SQLITE3_TEXT);
         $stmt->bindValue(':contact_email', $contact_email, SQLITE3_TEXT);
         $stmt->bindValue(':submission_date', date('Y-m-d H:i:s'), SQLITE3_TEXT);
-        $result = $stmt->execute();
+        try {
+            $result = $stmt->execute();
+            if (!$result) {
+                throw new Exception("Database insert failed.");
+            }
+        } catch (Exception $e) {
+            error_log("Filing submission failed: " . $e->getMessage());
+            $error_message = "备案申请提交失败，请稍后重试！";
+        }
         
-        if ($result) {
+        if (!isset($error_message)) {
             $display_number = "联bBb盟 icp备" . $filing_number;
             $code = "<a href='$site_url/query.php?keyword=$filing_number' target='_blank'>$display_number</a>";
             $subject = "备案申请已提交 - " . ($settings['site_title'] ?? '');
             $body = "<h2>备案申请确认</h2><p>您的网站 <strong>" . $website_name . "</strong> 的备案申请已提交。</p><p>备案号：<strong>$display_number</strong></p><p>状态：待审核</p><p>审核将在 2~4 个休息日内完成，请耐心等待。</p>";
-            if (!sendMail($contact_email, $subject, $body)) {
+            try {
+                if (!sendMail($contact_email, $subject, $body)) {
+                    throw new Exception("Mail sending failed.");
+                }
+            } catch (Exception $e) {
+                error_log("Mail sending failed: " . $e->getMessage());
                 $mail_error = "邮件发送失败，请联系管理员";
             }
-        } else {
-            $error_message = "备案申请提交失败，请稍后重试！";
         }
     }
 } else {

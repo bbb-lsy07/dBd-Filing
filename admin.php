@@ -1,6 +1,49 @@
 <?php
 session_start();
 require_once 'common.php';
+require_once 'config.php';
+
+// 环境检测
+$errors = [];
+
+// 检查PHP版本
+if (version_compare(PHP_VERSION, '7.4.0', '<')) {
+    $errors[] = 'PHP版本过低，请升级到PHP 7.4或更高版本。当前版本：' . PHP_VERSION;
+}
+
+// 检查SQLite3扩展
+if (!class_exists('SQLite3')) {
+    $errors[] = '未安装SQLite3扩展，请在php.ini中启用或安装。';
+}
+
+// 检查cURL扩展
+if (!function_exists('curl_init')) {
+    $errors[] = '未安装cURL扩展，请在php.ini中启用或安装。';
+}
+
+// 检查GD库扩展
+if (!function_exists('gd_info')) {
+    $errors[] = '未安装GD库扩展，请在php.ini中启用或安装。';
+}
+
+// 检查文件写入权限
+$test_file = 'test_write_permission.txt';
+if (@file_put_contents($test_file, 'test') === false) {
+    $errors[] = '当前目录或子目录没有写入权限，请检查目录权限。';
+} else {
+    @unlink($test_file);
+}
+
+// 如果存在错误，显示错误信息并停止执行
+if (!empty($errors)) {
+    echo '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>环境检测失败</title><style>body{font-family: Arial, sans-serif; margin: 20px; background-color: #f8f8f8; color: #333;} .container{background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);} h1{color: #d9534f;} ul{list-style-type: none; padding: 0;} li{margin-bottom: 10px; background-color: #f2dede; border: 1px solid #ebccd1; color: #a94442; padding: 10px; border-radius: 4px;}</style></head><body><div class="container"><h1>环境检测失败</h1><p>系统运行所需环境不满足，请根据以下提示进行配置：</p><ul>';
+    foreach ($errors as $error) {
+        echo '<li>' . htmlspecialchars($error) . '</li>';
+    }
+    echo '</ul><p>配置完成后，请刷新本页面。</p></div></body></html>';
+    exit();
+}
+
 $db = init_database();
 
 if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true || !isset($_SESSION['admin_id']) || (isset($_SESSION['user_role']) && $_SESSION['user_role'] !== 'admin')) {
@@ -26,78 +69,136 @@ if (!isset($_SESSION['csrf_token'])) {
 }
 $csrf_token = $_SESSION['csrf_token'];
 
+// 获取统计数据
+$total_filings = $db->querySingle("SELECT COUNT(*) FROM filings");
+$pending_filings = $db->querySingle("SELECT COUNT(*) FROM filings WHERE status = 'pending'");
+$approved_filings = $db->querySingle("SELECT COUNT(*) FROM filings WHERE status = 'approved'");
+$rejected_filings = $db->querySingle("SELECT COUNT(*) FROM filings WHERE status = 'rejected'");
+
+// 获取每日新增备案数量 (过去7天)
+$daily_new_filings = [];
+for ($i = 6; $i >= 0; $i--) {
+    $date = date('Y-m-d', strtotime("-$i days"));
+    $count = $db->querySingle("SELECT COUNT(*) FROM filings WHERE DATE(submission_date) = '{$date}'");
+    $daily_new_filings[$date] = $count ?: 0;
+}
+
+// 获取每月新增备案数量 (过去12个月)
+$monthly_new_filings = [];
+for ($i = 11; $i >= 0; $i--) {
+    $month = date('Y-m', strtotime("-$i months"));
+    $count = $db->querySingle("SELECT COUNT(*) FROM filings WHERE STRFTIME('%Y-%m', submission_date) = '{$month}'");
+    $monthly_new_filings[$month] = $count ?: 0;
+}
+
 if (isset($_GET['delete'])) {
-    $stmt = $db->prepare("DELETE FROM filings WHERE id = :id");
-    $stmt->bindValue(':id', (int)$_GET['delete'], SQLITE3_INTEGER);
-    $stmt->execute();
-    header("Location: admin.php");
-    exit;
+    try {
+        $stmt = $db->prepare("DELETE FROM filings WHERE id = :id");
+        $stmt->bindValue(':id', (int)$_GET['delete'], SQLITE3_INTEGER);
+        $stmt->execute();
+        header("Location: admin.php");
+        exit;
+    } catch (Exception $e) {
+        error_log("删除备案失败: " . $e->getMessage());
+        echo '<script>alert("删除备案失败，请稍后再试！"); window.location.href = "admin.php";</script>';
+        exit;
+    }
 }
 
 if (isset($_GET['approve'])) {
-    $stmt = $db->prepare("UPDATE filings SET status = 'approved' WHERE id = :id");
-    $stmt->bindValue(':id', (int)$_GET['approve'], SQLITE3_INTEGER);
-    $stmt->execute();
-    $stmt = $db->prepare("SELECT * FROM filings WHERE id = :id");
-    $stmt->bindValue(':id', (int)$_GET['approve'], SQLITE3_INTEGER);
-    $filing = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
-    $subject = "你的备案已通过审核 - " . ($settings['site_title'] ?? '');
-    $body = "<h2>备案审核通过</h2><p>你的网站 <strong>" . htmlspecialchars($filing['website_name']) . "</strong> 的备案申请已通过审核。</p><p>备案号：联bBb盟 icp备" . htmlspecialchars($filing['filing_number']) . "</p><p>请将以下代码添加到你的网站页脚：</p><pre><a href='" . htmlspecialchars($settings['site_url']) . "/query.php?keyword=" . htmlspecialchars($filing['filing_number']) . "' target='_blank'>联bBb盟 icp备" . htmlspecialchars($filing['filing_number']) . "</a></pre>";
-    if (!sendMail($filing['contact_email'], $subject, $body)) {
-        $mail_error = "邮件发送失败，请手动通知用户";
+    try {
+        $db->exec('BEGIN;');
+        $stmt = $db->prepare("UPDATE filings SET status = 'approved' WHERE id = :id");
+        $stmt->bindValue(':id', (int)$_GET['approve'], SQLITE3_INTEGER);
+        $stmt->execute();
+        $stmt = $db->prepare("SELECT * FROM filings WHERE id = :id");
+        $stmt->bindValue(':id', (int)$_GET['approve'], SQLITE3_INTEGER);
+        $filing = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+        $subject = "你的备案已通过审核 - " . ($settings['site_title'] ?? '');
+        $body = "<h2>备案审核通过</h2><p>你的网站 <strong>" . htmlspecialchars($filing['website_name']) . "</strong> 的备案申请已通过审核。</p><p>备案号：联bBb盟 icp备" . htmlspecialchars($filing['filing_number']) . "</p><p>请将以下代码添加到你的网站页脚：</p><pre><a href='" . htmlspecialchars($settings['site_url']) . "/query.php?keyword=" . htmlspecialchars($filing['filing_number']) . "' target='_blank'>联bBb盟 icp备" . htmlspecialchars($filing['filing_number']) . "</a></pre>";
+        if (!sendMail($filing['contact_email'], $subject, $body)) {
+            $mail_error = "邮件发送失败，请手动通知用户";
+            error_log("批准备案后邮件发送失败: " . $filing['contact_email']);
+        }
+        $db->exec('COMMIT;');
+        header("Location: admin.php");
+        exit;
+    } catch (Exception $e) {
+        $db->exec('ROLLBACK;');
+        error_log("批准备案失败: " . $e->getMessage());
+        echo '<script>alert("批准备案失败，请稍后再试！"); window.location.href = "admin.php";</script>';
+        exit;
     }
-    header("Location: admin.php");
-    exit;
 }
 
 if (isset($_GET['reject'])) {
-    $stmt = $db->prepare("UPDATE filings SET status = 'rejected' WHERE id = :id");
-    $stmt->bindValue(':id', (int)$_GET['reject'], SQLITE3_INTEGER);
-    $stmt->execute();
-    $stmt = $db->prepare("SELECT * FROM filings WHERE id = :id");
-    $stmt->bindValue(':id', (int)$_GET['reject'], SQLITE3_INTEGER);
-    $filing = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
-    $subject = "你的备案未通过审核 - " . ($settings['site_title'] ?? '');
-    $body = "<h2>备案审核未通过</h2><p>你的网站 <strong>" . htmlspecialchars($filing['website_name']) . "</strong> 的备案申请未通过审核。</p><p>请检查信息后重新提交。</p>";
-    if (!sendMail($filing['contact_email'], $subject, $body)) {
-        $mail_error = "邮件发送失败，请手动通知用户";
+    try {
+        $db->exec('BEGIN;');
+        $stmt = $db->prepare("UPDATE filings SET status = 'rejected' WHERE id = :id");
+        $stmt->bindValue(':id', (int)$_GET['reject'], SQLITE3_INTEGER);
+        $stmt->execute();
+        $stmt = $db->prepare("SELECT * FROM filings WHERE id = :id");
+        $stmt->bindValue(':id', (int)$_GET['reject'], SQLITE3_INTEGER);
+        $filing = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
+        $subject = "你的备案未通过审核 - " . ($settings['site_title'] ?? '');
+        $body = "<h2>备案审核未通过</h2><p>你的网站 <strong>" . htmlspecialchars($filing['website_name']) . "</strong> 的备案申请未通过审核。</p><p>请检查信息后重新提交。</p>";
+        if (!sendMail($filing['contact_email'], $subject, $body)) {
+            $mail_error = "邮件发送失败，请手动通知用户";
+            error_log("拒绝备案后邮件发送失败: " . $filing['contact_email']);
+        }
+        $db->exec('COMMIT;');
+        header("Location: admin.php");
+        exit;
+    } catch (Exception $e) {
+        $db->exec('ROLLBACK;');
+        error_log("拒绝备案失败: " . $e->getMessage());
+        echo '<script>alert("拒绝备案失败，请稍后再试！"); window.location.href = "admin.php";</script>';
+        exit;
     }
-    header("Location: admin.php");
-    exit;
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['new_username'])) {
     if ($_POST['new_password'] === $_POST['confirm_password']) {
-        $stmt = $db->prepare("UPDATE admins SET username = :username, password = :password, force_reset = 0 WHERE id = :id");
-        $stmt->bindValue(':username', htmlspecialchars($_POST['new_username']), SQLITE3_TEXT);
-        $stmt->bindValue(':password', password_hash($_POST['new_password'], PASSWORD_DEFAULT), SQLITE3_TEXT);
-        $stmt->bindValue(':id', $_SESSION['admin_id'], SQLITE3_INTEGER);
-        $stmt->execute();
-        $update_message = "账户信息已更新，请重新登录！";
-        session_destroy();
-        echo '<script>alert("账户信息已更新，请重新登录！"); window.location.href = "login.php";</script>';
-        exit;
+        try {
+            $stmt = $db->prepare("UPDATE admins SET username = :username, password = :password, force_reset = 0 WHERE id = :id");
+            $stmt->bindValue(':username', htmlspecialchars($_POST['new_username']), SQLITE3_TEXT);
+            $stmt->bindValue(':password', password_hash($_POST['new_password'], PASSWORD_DEFAULT), SQLITE3_TEXT);
+            $stmt->bindValue(':id', $_SESSION['admin_id'], SQLITE3_INTEGER);
+            $stmt->execute();
+            $update_message = "账户信息已更新，请重新登录！";
+            session_destroy();
+            echo '<script>alert("账户信息已更新，请重新登录！"); window.location.href = "login.php";</script>';
+            exit;
+        } catch (Exception $e) {
+            error_log("更新管理员账户失败: " . $e->getMessage());
+            $update_error = "更新账户信息失败，请稍后再试！";
+        }
     } else {
         $update_error = "两次输入的密码不一致！";
     }
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['site_title'])) {
-    $stmt = $db->prepare("UPDATE settings SET site_title = :site_title, site_url = :site_url, welcome_message = :welcome_message, contact_email = :contact_email, qq_group = :qq_group, smtp_host = :smtp_host, smtp_port = :smtp_port, smtp_username = :smtp_username, smtp_password = :smtp_password, smtp_secure = :smtp_secure, background_image = :background_image WHERE id = 1");
-    $stmt->bindValue(':site_title', htmlspecialchars($_POST['site_title']), SQLITE3_TEXT);
-    $stmt->bindValue(':site_url', htmlspecialchars($_POST['site_url']), SQLITE3_TEXT);
-    $stmt->bindValue(':welcome_message', htmlspecialchars($_POST['welcome_message']), SQLITE3_TEXT);
-    $stmt->bindValue(':contact_email', htmlspecialchars($_POST['contact_email']), SQLITE3_TEXT);
-    $stmt->bindValue(':qq_group', htmlspecialchars($_POST['qq_group']), SQLITE3_TEXT);
-    $stmt->bindValue(':smtp_host', htmlspecialchars($_POST['smtp_host']), SQLITE3_TEXT);
-    $stmt->bindValue(':smtp_port', (int)$_POST['smtp_port'], SQLITE3_INTEGER);
-    $stmt->bindValue(':smtp_username', htmlspecialchars($_POST['smtp_username']), SQLITE3_TEXT);
-    $stmt->bindValue(':smtp_password', htmlspecialchars($_POST['smtp_password']), SQLITE3_TEXT);
-    $stmt->bindValue(':smtp_secure', htmlspecialchars($_POST['smtp_secure']), SQLITE3_TEXT);
-    $stmt->bindValue(':background_image', htmlspecialchars($_POST['background_image']), SQLITE3_TEXT);
-    $stmt->execute();
-    $settings_update_message = "站点设置已更新！";
-    $settings = $db->querySingle("SELECT * FROM settings", true);
+    try {
+        $stmt = $db->prepare("UPDATE settings SET site_title = :site_title, site_url = :site_url, welcome_message = :welcome_message, contact_email = :contact_email, qq_group = :qq_group, smtp_host = :smtp_host, smtp_port = :smtp_port, smtp_username = :smtp_username, smtp_password = :smtp_password, smtp_secure = :smtp_secure, background_image = :background_image WHERE id = 1");
+        $stmt->bindValue(':site_title', htmlspecialchars($_POST['site_title']), SQLITE3_TEXT);
+        $stmt->bindValue(':site_url', htmlspecialchars($_POST['site_url']), SQLITE3_TEXT);
+        $stmt->bindValue(':welcome_message', htmlspecialchars($_POST['welcome_message']), SQLITE3_TEXT);
+        $stmt->bindValue(':contact_email', htmlspecialchars($_POST['contact_email']), SQLITE3_TEXT);
+        $stmt->bindValue(':qq_group', htmlspecialchars($_POST['qq_group']), SQLITE3_TEXT);
+        $stmt->bindValue(':smtp_host', htmlspecialchars($_POST['smtp_host']), SQLITE3_TEXT);
+        $stmt->bindValue(':smtp_port', (int)$_POST['smtp_port'], SQLITE3_INTEGER);
+        $stmt->bindValue(':smtp_username', htmlspecialchars($_POST['smtp_username']), SQLITE3_TEXT);
+        $stmt->bindValue(':smtp_password', htmlspecialchars($_POST['smtp_password']), SQLITE3_TEXT);
+        $stmt->bindValue(':smtp_secure', htmlspecialchars($_POST['smtp_secure']), SQLITE3_TEXT);
+        $stmt->bindValue(':background_image', htmlspecialchars($_POST['background_image']), SQLITE3_TEXT);
+        $stmt->execute();
+        $settings_update_message = "站点设置已更新！";
+        $settings = $db->querySingle("SELECT * FROM settings", true);
+    } catch (Exception $e) {
+        error_log("更新站点设置失败: " . $e->getMessage());
+        $settings_update_message = "更新站点设置失败，请稍后再试！";
+    }
 }
 
 // 检查更新逻辑（仅在 action=check_update 或 AJAX 调用时执行）
@@ -105,7 +206,7 @@ $versions = [];
 $update_error = null;
 if (isset($_GET['action']) && $_GET['action'] == 'check_update') {
     ob_start(); // 开始输出缓冲，防止意外输出
-    $json_url = 'https://admin-hosting-v.bbb-lsy07.my/json/1.json';
+    $json_url = UPDATE_JSON_URL;
     $ch = curl_init($json_url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
@@ -185,7 +286,7 @@ if (isset($_GET['update_success'])) {
     $update_error_message = "更新失败，错误代码：{$_GET['update_error']}";
 }
 
-$results = $db->query("SELECT * FROM filings ORDER BY submission_date DESC");
+$results = $db->query('SELECT *, COALESCE(is_healthy, 1) as is_healthy, last_check_time FROM filings ORDER BY submission_date DESC');
 ?>
 
 <!DOCTYPE html>
@@ -295,6 +396,7 @@ $results = $db->query("SELECT * FROM filings ORDER BY submission_date DESC");
             <p>欢迎，管理员！ 
                 <a href="#" class="modify-link" onclick="document.getElementById('modifyModal').style.display='flex'">修改账户</a>
                 <a href="#" class="modify-link" onclick="document.getElementById('settingsModal').style.display='flex'">站点设置</a>
+                <a href="admin.php?action=statistics" class="modify-link">数据统计</a>
                 <a href="#" class="modify-link" onclick="document.getElementById('githubModal').style.display='flex'">初始版本</a>
                 <a href="logout.php" class="logout-link">退出登录</a>
                 <a href="#" class="check-update-link" onclick="showCheckUpdateModal()">检查更新</a>
@@ -306,44 +408,66 @@ $results = $db->query("SELECT * FROM filings ORDER BY submission_date DESC");
             <?php if (isset($update_success_message)) echo "<p class='success'>$update_success_message</p>"; ?>
             <?php if (isset($update_error_message)) echo "<p class='error'>$update_error_message</p>"; ?>
         </div>
-        <div class="table-wrapper card-effect">
-            <table>
-                <thead>
-                    <tr>
-                        <th data-label="ID">ID</th>
-                        <th data-label="备案号">备案号</th>
-                        <th data-label="网站名称">网站名称</th>
-                        <th data-label="地址">地址</th>
-                        <th data-label="描述">描述</th>
-                        <th data-label="邮箱">邮箱</th>
-                        <th data-label="提交时间">提交时间</th>
-                        <th data-label="状态">状态</th>
-                        <th data-label="操作">操作</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php while ($row = $results->fetchArray(SQLITE3_ASSOC)): ?>
+        <?php if (isset($_GET['action']) && $_GET['action'] == 'statistics'): ?>
+            <?php include 'admin_statistics.php'; ?>
+        <?php else: ?>
+            <div class="table-wrapper card-effect">
+                <table>
+                    <thead>
                         <tr>
-                            <td data-label="ID"><?php echo $row['id']; ?></td>
-                            <td data-label="备案号">联bBb盟 icp备<?php echo $row['filing_number']; ?></td>
-                            <td data-label="网站名称"><?php echo htmlspecialchars($row['website_name']); ?></td>
-                            <td data-label="地址"><a href="<?php echo htmlspecialchars($row['website_url']); ?>" target="_blank"><?php echo htmlspecialchars($row['website_url']); ?></a></td>
-                            <td data-label="描述"><?php echo htmlspecialchars($row['description']); ?></td>
-                            <td data-label="邮箱"><?php echo htmlspecialchars($row['contact_email']); ?></td>
-                            <td data-label="提交时间"><?php echo htmlspecialchars($row['submission_date']); ?></td>
-            <td data-label="状态"><?php echo $row['status'] == 'pending' ? '待审核' : ($row['status'] == 'approved' ? '已通过' : '已拒绝'); ?></td>
-            <td data-label="操作">
-                <?php if ($row['status'] == 'pending'): ?>
-                    <a href="admin.php?approve=<?php echo $row['id']; ?>" class="approve-link">通过</a> |
-                    <a href="admin.php?reject=<?php echo $row['id']; ?>" class="reject-link">拒绝</a> |
-                <?php endif; ?>
-                <a href="admin.php?delete=<?php echo $row['id']; ?>" class="delete-link" onclick="return confirm('确定删除吗？');">删除</a>
-            </td>
-        </tr>
-    <?php endwhile; ?>
-</tbody>
-            </table>
-        </div>
+                            <th data-label="ID">ID</th>
+                            <th data-label="备案号">备案号</th>
+                            <th data-label="网站名称">网站名称</th>
+                            <th data-label="地址">地址</th>
+                            <th data-label="描述">描述</th>
+                            <th data-label="邮箱">邮箱</th>
+                            <th data-label="提交时间">提交时间</th>
+                            <th data-label="状态">状态</th>
+                            <th data-label="健康状态">健康状态</th>
+                            <th data-label="上次检查时间">上次检查时间</th>
+                            <th data-label="操作">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php while ($row = $results->fetchArray(SQLITE3_ASSOC)): ?>
+                            <tr>
+                                <td data-label="ID"><?php echo $row['id']; ?></td>
+                                <td data-label="备案号">联bBb盟 icp备<?php echo $row['filing_number']; ?></td>
+                                <td data-label="网站名称"><?php echo htmlspecialchars($row['website_name']); ?></td>
+                                <td data-label="地址"><a href="<?php echo htmlspecialchars($row['website_url']); ?>" target="_blank"><?php echo htmlspecialchars($row['website_url']); ?></a></td>
+                                <td data-label="描述"><?php echo htmlspecialchars($row['description']); ?></td>
+                                <td data-label="邮箱"><?php echo htmlspecialchars($row['contact_email']); ?></td>
+                                <td data-label="提交时间"><?php echo htmlspecialchars($row['submission_date']); ?></td>
+                                <td data-label="状态"><?php echo $row['status'] == 'pending' ? '待审核' : ($row['status'] == 'approved' ? '已通过' : '已拒绝'); ?></td>
+                                <td data-label="健康状态">
+                                    <?php
+                                        if ($row['is_healthy'] == 1) {
+                                            echo '<span style="color: green;">正常</span>';
+                                        } else {
+                                            echo '<span style="color: red;">异常</span>';
+                                        }
+                                    ?>
+                                </td>
+                                <td data-label="上次检查时间">
+                                    <?php echo $row['last_check_time'] ? htmlspecialchars($row['last_check_time']) : 'N/A'; ?>
+                                </td>
+                                <td data-label="操作">
+                                    <?php if ($row['status'] == 'pending'): ?>
+                                        <a href="admin.php?approve=<?php echo $row['id']; ?>" class="approve-link">通过</a> |
+                                         <a href="admin.php?reject=<?php echo $row['id']; ?>" class="reject-link">拒绝</a> |
+                                    <?php elseif ($row['status'] == 'approved'): ?>
+                                        <a href="generate_certificate.php?filing_id=<?php echo $row['id']; ?>" target="_blank" class="btn btn-success btn-sm">查看证书</a> |
+                                        <a href="admin.php?reject=<?php echo $row['id']; ?>" class="reject-link">拒绝</a> |
+                                        <a href="#" class="btn btn-info btn-sm check-health-btn" data-id="<?php echo $row['id']; ?>">健康检查</a> |
+                                    <?php endif; ?>
+                                     <a href="admin.php?delete=<?php echo $row['id']; ?>" class="delete-link" onclick="return confirm('确定删除吗？');">删除</a>
+
+
+                        <?php endwhile; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
     </div>
     <div class="footer">
         <?php echo getFooterText(); ?>
@@ -500,6 +624,46 @@ $results = $db->query("SELECT * FROM filings ORDER BY submission_date DESC");
                 }
                 adjustContainerHeight();
                 window.addEventListener('resize', adjustContainerHeight);
+
+                // Manual Health Check via AJAX
+                document.querySelectorAll('.check-health-btn').forEach(button => {
+                    button.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        const filingId = this.dataset.id;
+                        const healthStatusCell = this.closest('tr').querySelector('td[data-label="健康状态"]');
+                        const lastCheckTimeCell = this.closest('tr').querySelector('td[data-label="上次检查时间"]');
+
+                        healthStatusCell.innerHTML = '<span style="color: gray;">检查中...</span>';
+                        lastCheckTimeCell.textContent = '更新中...';
+
+                        fetch('process_health_check.php?filing_id=' + filingId, {
+                            method: 'GET',
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest'
+                            }
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                if (data.is_healthy == 1) {
+                                    healthStatusCell.innerHTML = '<span style="color: green;">正常</span>';
+                                } else {
+                                    healthStatusCell.innerHTML = '<span style="color: red;">异常</span>';
+                                }
+                                lastCheckTimeCell.textContent = data.last_check_time;
+                            } else {
+                                healthStatusCell.innerHTML = '<span style="color: orange;">检查失败</span>';
+                                lastCheckTimeCell.textContent = 'N/A';
+                                console.error('健康检查失败:', data.message);
+                            }
+                        })
+                        .catch(error => {
+                            healthStatusCell.innerHTML = '<span style="color: red;">网络错误</span>';
+                            lastCheckTimeCell.textContent = 'N/A';
+                            console.error('健康检查请求错误:', error);
+                        });
+                    });
+                });
 
                 const form = document.getElementById('update-form');
                 const button = document.getElementById('update-button');

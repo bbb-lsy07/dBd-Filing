@@ -42,6 +42,7 @@ function sendMail($to, $subject, $body) {
         $mail->send();
         return true;
     } catch (Exception $e) {
+        error_log("邮件发送失败: " . $mail->ErrorInfo . " - " . $e->getMessage());
         return false;
     }
 }

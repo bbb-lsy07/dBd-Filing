@@ -1,8 +1,14 @@
 <?php
+require_once 'config.php';
 session_start();
 
 function init_database() {
-    $db = new SQLite3('database.sqlite');
+    try {
+        $db = new SQLite3(DB_FILE);
+    } catch (Exception $e) {
+        error_log("Database connection failed: " . $e->getMessage());
+        die("Error: Could not connect to the database. Please check the server logs for more details.");
+    }
 
     $db->exec("CREATE TABLE IF NOT EXISTS settings (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,8 +46,23 @@ function init_database() {
         description TEXT,
         contact_email TEXT,
         submission_date TEXT,
-        status TEXT DEFAULT 'pending'
+        status TEXT DEFAULT 'pending',
+        is_healthy INTEGER DEFAULT 1,
+        last_check_time TEXT
     )");
+
+    // Add is_healthy column if it doesn't exist
+    $result = $db->query("PRAGMA table_info(filings)");
+    $columns = [];
+    while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+        $columns[] = $row['name'];
+    }
+    if (!in_array('is_healthy', $columns)) {
+        $db->exec("ALTER TABLE filings ADD COLUMN is_healthy INTEGER DEFAULT 1");
+    }
+    if (!in_array('last_check_time', $columns)) {
+        $db->exec("ALTER TABLE filings ADD COLUMN last_check_time TEXT");
+    }
 
     $db->exec("CREATE TABLE IF NOT EXISTS admins (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,20 +82,20 @@ function init_database() {
 
     if (!$db->querySingle("SELECT * FROM settings")) {
         $db->exec("INSERT INTO settings (site_title, site_url, welcome_message, contact_email, qq_group, background_image, version) 
-                   VALUES ('联bBb盟 ICP 备案系统', 'https://icp.bbb-lsy07.my', '这是一个虚拟备案系统，仅供娱乐和社区互动使用，非官方备案。', 'admin@bbb-lsy07.my', '123456789', 'https://www.dmoe.cc/random.php', '2.5.0')");
+                   VALUES ('" . DEFAULT_SITE_TITLE . "', '" . DEFAULT_SITE_URL . "', '" . DEFAULT_WELCOME_MESSAGE . "', '" . DEFAULT_CONTACT_EMAIL . "', '" . DEFAULT_QQ_GROUP . "', '" . DEFAULT_BACKGROUND_IMAGE . "', '" . DEFAULT_VERSION . "')");
     }
 
     if ($db->querySingle("SELECT COUNT(*) FROM admins") == 0) {
         $stmt = $db->prepare("INSERT INTO admins (username, password, force_reset, role) VALUES (:username, :password, 1, 'admin')");
-        $stmt->bindValue(':username', 'admin', SQLITE3_TEXT);
-        $stmt->bindValue(':password', password_hash('123456', PASSWORD_DEFAULT), SQLITE3_TEXT);
+        $stmt->bindValue(':username', DEFAULT_ADMIN_USER, SQLITE3_TEXT);
+        $stmt->bindValue(':password', password_hash(DEFAULT_ADMIN_PASS, PASSWORD_DEFAULT), SQLITE3_TEXT);
         $stmt->execute();
     }
 
     return $db;
 }
 
-define('APP_VERSION', '2.5.0');
+define('APP_VERSION', DEFAULT_VERSION);
 
 function getFooterText() {
     $db = init_database();
@@ -82,8 +103,6 @@ function getFooterText() {
     $result = $stmt->execute();
     $row = $result->fetchArray(SQLITE3_ASSOC);
     $row = $row ?: ['site_title' => '联bBb盟 ICP 备案系统', 'version' => '1.0.0'];
-    return "<footer>
-        <p>版权所有 © " . date('Y') . " " . htmlspecialchars($row['site_title']) . " | 版本 " . htmlspecialchars($row['version']) . "</p>
-    </footer>";
+    return "<p>版权所有 © " . date('Y') . " " . htmlspecialchars($row['site_title']) . " | 版本 " . htmlspecialchars($row['version']) . "</p>";
 }
 ?>
