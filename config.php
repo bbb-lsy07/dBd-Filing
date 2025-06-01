@@ -17,6 +17,6 @@ define('DEFAULT_WELCOME_MESSAGE', '这是一个虚拟备案系统，仅供娱乐
 define('DEFAULT_CONTACT_EMAIL', 'admin@bbb-lsy07.my');
 define('DEFAULT_QQ_GROUP', '123456789');
 define('DEFAULT_BACKGROUND_IMAGE', 'https://www.dmoe.cc/random.php');
-define('DEFAULT_VERSION', '2.5.2'); // 假设这是当前或目标版本
+define('DEFAULT_VERSION', '2.5.3'); // 版本号更新
 
 ?>

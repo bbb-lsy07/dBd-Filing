@@ -51,18 +51,18 @@ $csrf_token = $_SESSION['csrf_token'];
                 $stmt->bindValue(':keyword', htmlspecialchars($_GET['keyword']), SQLITE3_TEXT);
                 $row = $stmt->execute()->fetchArray(SQLITE3_ASSOC);
                 if ($row): ?>
-                    <form action="process_change.php" method="POST" class="neon-form">
-                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
-                        <input type="hidden" name="id" value="<?php echo $row['id']; ?>">
-                        <input type="text" name="website_name" class="search-input" value="<?php echo htmlspecialchars($row['website_name']); ?>" required>
-                        <input type="url" name="website_url" class="search-input" value="<?php echo htmlspecialchars($row['website_url']); ?>" required>
-                        <textarea name="description" class="search-input" required><?php echo htmlspecialchars($row['description']); ?></textarea>
-                        <input type="email" name="contact_email" class="search-input" value="<?php echo htmlspecialchars($row['contact_email']); ?>" required>
-                        <button type="submit" class="search-button glow-button">
-                            <span>提交变更</span>
-                            <div class="glow"></div>
-                        </button>
-                    </form>
+                    <div class="confirmation">
+                        <p>是否确认要变更网站 "<?php echo htmlspecialchars($row['website_name']); ?>" 的备案信息？</p>
+                        <form action="change_verify.php" method="POST" class="neon-form">
+                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+                            <input type="hidden" name="id" value="<?php echo $row['id']; ?>">
+                            <button type="submit" class="search-button glow-button">
+                                <span>确认变更</span>
+                                <div class="glow"></div>
+                            </button>
+                        </form>
+                        <a href="change.php"><button type="button" class="search-button glow-button"><span>取消</span><div class="glow"></div></button></a>
+                    </div>
                 <?php else: ?>
                     <p class="error">未找到相关备案信息。</p>
                 <?php endif; ?>
