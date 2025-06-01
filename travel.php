@@ -16,10 +16,7 @@ $travel_number = '';
 $website = null;
 $target_name = '';
 if (!empty($approved_websites)) {
-    $last_index = isset($_SESSION['last_travel_index']) ? $_SESSION['last_travel_index'] : -1;
-    $website_index = ($last_index + 1) % count($approved_websites);
-    $_SESSION['last_travel_index'] = $website_index;
-    $website = $approved_websites[$website_index];
+    $website = $approved_websites[array_rand($approved_websites)];
 
     // Generate travel number
     $stmt = $db->prepare("SELECT COUNT(*) as count FROM travel_logs WHERE website_url = :website_url");

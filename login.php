@@ -17,6 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['reset_password'])) {
             $_SESSION['loggedin'] = true;
             $_SESSION['admin_id'] = $row['id'];
             $_SESSION['user_role'] = $row['role'] ?? 'admin';
+            session_regenerate_id(true);  // 防止会话固定攻击并确保重定向后会话生效
             if ($row['force_reset'] == 1) $_SESSION['force_reset'] = true;
             else header("Location: admin.php");
             exit;
