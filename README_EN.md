@@ -103,7 +103,7 @@ chmod -R 755 .
 - Right-click folder → Properties → Security → Edit → Check “Write” permission
 
 ### 4. First Access
-- Visit: `http://your-domain/index.php`
+- Visit: `http://your-domain/admin.php`
 - The system will automatically perform an environment check. If necessary PHP extensions are missing or file write permissions are insufficient, detailed error messages will be displayed. Please fix them as prompted.
 - Once the environment check passes, the system will auto-create the database and initialize the admin account (`admin/123456`). **Change the password immediately after first login**!
 
