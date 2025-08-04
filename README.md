@@ -8,6 +8,9 @@
 >
 >Due to initial design flaws, this service is no longer maintained. A brand new version will be released around2025年8月31日. Please continue to follow the account updates!
 
+新项目地址：[https://github.com/bbb-lsy07/Yuan-ICP/](https://github.com/bbb-lsy07/Yuan-ICP/)
+
+
 🌐 **Language Switch**: [English README](https://github.com/bbb-lsy07/dBd-Filing/blob/main/README_EN.md)
 
 > **重要提示**：本系统仅用于技术学习与娱乐，不具备任何官方备案效力，禁止用于非法场景或存储真实敏感信息！
