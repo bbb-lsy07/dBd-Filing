@@ -5,7 +5,8 @@
 ![image](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)
 
 >由于最初设计缺陷，本服务不再维护，大概在2025.8.31日前推出全新的版本，可持续关注账号动态！
->Due to initial design flaws, this service is no longer maintained. A brand new version will be released around August 31, 2025. Please continue to follow the account updates!
+>
+>Due to initial design flaws, this service is no longer maintained. A brand new version will be released around2025年8月31日. Please continue to follow the account updates!
 
 🌐 **Language Switch**: [English README](https://github.com/bbb-lsy07/dBd-Filing/blob/main/README_EN.md)
 
